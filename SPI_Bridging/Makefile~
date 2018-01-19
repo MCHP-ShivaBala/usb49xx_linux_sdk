@@ -14,7 +14,7 @@ CPP_SRC = spi_bridging.cpp
 LIB_USB_PATH=$(shell pkg-config --cflags libusb-1.0)
           
 #Include Paths
-INC_DIR = /usr/local/include/libusb-1.0 ../libpt2
+INC_DIR = /usr/local/include/libusb-1.0 ../../libpt2
 LIB_DIR = /usr/local/lib /usr/lib
 
 #Defnes
