@@ -1,28 +1,12 @@
 /*
 **********************************************************************************
-* © 2015 Microchip Technology Inc. and its subsidiaries.
-* You may use this software and any derivatives exclusively with
-* Microchip products.
-* THIS SOFTWARE IS SUPPLIED BY MICROCHIP "AS IS".
-* NO WARRANTIES, WHETHER EXPRESS, IMPLIED OR STATUTORY, APPLY TO THIS SOFTWARE,
-* INCLUDING ANY IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY,
-* AND FITNESS FOR A PARTICULAR PURPOSE, OR ITS INTERACTION WITH MICROCHIP
-* PRODUCTS, COMBINATION WITH ANY OTHER PRODUCTS, OR USE IN ANY APPLICATION.
-* IN NO EVENT WILL MICROCHIP BE LIABLE FOR ANY INDIRECT, SPECIAL, PUNITIVE,
-* INCIDENTAL OR CONSEQUENTIAL LOSS, DAMAGE, COST OR EXPENSE OF ANY KIND
-* WHATSOEVER RELATED TO THE SOFTWARE, HOWEVER CAUSED, EVEN IF MICROCHIP HAS
-* BEEN ADVISED OF THE POSSIBILITY OR THE DAMAGES ARE FORESEEABLE.
-* TO THE FULLEST EXTENT ALLOWED BY LAW, MICROCHIP'S TOTAL LIABILITY ON ALL
-* CLAIMS IN ANY WAY RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF
-* FEES, IF ANY, THAT YOU HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
-* MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE
-* OF THESE TERMS.
+ADD LICENSE
 **********************************************************************************
 *   spi_bridging.cpp
 *   This file gives the sample code/ test code for using MchpUSB2530 API
 *	Interface.
 **********************************************************************************
-*  $Revision: #1.2 $  $DateTime: 2016/01/14  18:04:00 $  $    $
+*  $Revision:
 *  Description: Sample code for SPI Bridging
 **********************************************************************************
 * $File:
@@ -32,7 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <stdio.h>
+#include <stdio.h>*
 #include <iostream>
 #include <stdbool.h>
 
@@ -67,10 +51,8 @@ int main (int argc, char* argv[])
 	// UINT8 byReadBuffer[512];
     uint8_t byReadBuffer[512];
     uint8_t byWriteBuffer[260] = {0x02};
-
 	char path[20] = {0};
 	int hub_count = 0;
-
 
 	if((0 == strcmp(argv[1],"--help")) || (0 == strcmp(argv[1],"/?")))  //Help
 	{
