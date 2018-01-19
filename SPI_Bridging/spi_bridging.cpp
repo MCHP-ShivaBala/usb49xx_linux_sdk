@@ -49,7 +49,7 @@ int main (int argc, char* argv[])
 	UINT16 DataLen;
 	UINT32 wTotalLen;
 	// UINT8 byReadBuffer[512];
-    uint8_t byReadBuffer[512];
+    uint8_t byReadBuffer[517];
     uint8_t byWriteBuffer[260] = {0x02};
 	char path[20] = {0};
 	int hub_count = 0;
@@ -58,10 +58,10 @@ int main (int argc, char* argv[])
 	{
 		printf("Operation : Write \n");
 		printf("Usage: ./spiBridging VID(Hex) PID(Hex) DevicePath(String) Operation(0x01) FirmwareFile \n");
-		printf("Example: ./spiBridging 0x0424 0x4504 8 0x01 USB2534_SPI_CARPLAY_V128.bin \n \n");
+		printf("Example: ./spiBridging 0x424 0x4916 \"1:2\" 0x01 USB49XX_SILICON_CarLife_SPI_V1.27.bin \n \n");
 		printf("Operation : Read \n");
 		printf("Usage: ./spiBridging VID(Hex) PID(Hex) DevicePath(String) Operation(0x00) StartAddress Length \n");
-		printf("Example: ./spiBridging 0x0424 0x4504 8 0x00 0x00 4 \n\n");
+		printf("Example: ./spiBridging 0x424 0x4916 \"1:2\" 0x00 0x00 512 \n\n");    
 		printf("Operation : Transfer\n");
 		printf("Usage: ./spiBridging VID(Hex) PID(Hex) DevicePath(String) Operation(0x03) Command DataLength TotalLength\n");
 		printf("Example: ./spiBridging 0x0424 0x4504 8 0x03 0x9f 1 4 \n\n");
@@ -80,10 +80,12 @@ int main (int argc, char* argv[])
 		product_id =  strtol (argv[2], NULL, 0) ;
 		strcpy(path,argv[3]);
 		byOperation=  strtol (argv[4], NULL, 0) ;
+
 		if(byOperation == 0x00) // Read.
 		{
 			byStartAddr=  strtol (argv[5], NULL, 0) ;
-			byLength   =  strtol (argv[6], NULL, 0) ;
+			// byLength   =  strtol (argv[6], NULL, 0) ;
+            wTotalLen   =  strtol (argv[6], NULL, 0) ;
 		}
 		else if(byOperation == 0x01) //Write
 		{
@@ -154,6 +156,76 @@ int main (int argc, char* argv[])
 		// 	strcat(sztext,chText);
 		// }
 		// printf("%s \n",sztext);
+
+        //Enable the SPI interface.
+        if(FALSE == MchpUsbSpiSetConfig (hDevice,1))
+        {
+            printf ("\nError: SPI Pass thru enter failed:\n");
+            exit (1);
+        }
+
+        //performs write operation to the SPI Interface.
+        //if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer,DataLen,wTotalLen)) //write
+        //{
+        //	printf("SPI Transfer write failed \n");
+        //	exit (1);
+        //}
+
+        byBuffer[0] = 0x0B;
+        //performs write operation to the SPI Interface.	//SB
+        if(FALSE == MchpUsbSpiTransfer(hDevice,0,byBuffer,4,wTotalLen+5)) //write
+        {
+            printf("SPI Transfer write failed \n");
+            exit (1);
+        }
+
+        //performs read operation to the SPI Interface.
+        //if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,wTotalLen,wTotalLen))
+        //{if(i%16 == 0)
+        //		printf("\n");
+        //	printf("SPI Transfer read failed \n");
+        //	exit (1);
+        //}
+
+        //performs read operation to the SPI Interface.	//SB
+        if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,DataLen,wTotalLen+5))
+        {
+            printf("SPI Transfer read failed \n");
+            exit (1);
+        }
+
+        //if(FALSE == SandiaBlockSpiRead(hDevice, (UINT8*)byBuffer, byReadBuffer, DataLen, wTotalLen))
+        //{
+        //	printf("SPI Block read failed \n");
+        //	exit (1);
+        //}
+
+        /*printf("String length sztext: %d\n", strlen(sztext));
+        for(UINT8 i =1; i< wTotalLen+1; i++)
+        {
+            sprintf(chText,"0x%02x",byReadBuffer[i] );
+            strcat(sztext,chText);
+            printf("String length chText: %d sztext: %d\n", strlen(chText),strlen(sztext));
+            //if (strlen(sztext) == 2060)
+            //	break;
+        }*/
+
+        //printf("%s",sztext);
+
+        //Disable the SPI interface.
+        if(FALSE == MchpUsbSpiSetConfig (hDevice,0))
+        {
+            printf ("Error: SPI Pass thru enter failed:\n");
+            exit (1);
+        }
+
+        for(UINT16 i =1; i<wTotalLen+1; i++)
+        {
+            printf("0x%02x  ",byReadBuffer[i]);
+            if(i%16 == 0)
+                printf("\n");
+        }
+        printf("\n");
 	}
 	// else if(byOperation == 0x01)//Write
 	// {
@@ -173,78 +245,6 @@ int main (int argc, char* argv[])
 	// }
 	else //Transfer
 	{
-
-		if (byBuffer[0] == 0x0B)
-		{
-		//Enable the SPI interface.
-		if(FALSE == MchpUsbSpiSetConfig (hDevice,1))
-		{
-			printf ("\nError: SPI Pass thru enter failed:\n");
-			exit (1);
-		}
-
-		//performs write operation to the SPI Interface.
-		//if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer,DataLen,wTotalLen)) //write
-		//{
-		//	printf("SPI Transfer write failed \n");
-		//	exit (1);
-		//}
-
-		//performs write operation to the SPI Interface.	//SB
-		if(FALSE == MchpUsbSpiTransfer(hDevice,0,byBuffer,DataLen,wTotalLen+5)) //write
-		{
-			printf("SPI Transfer write failed \n");
-			exit (1);
-		}
-
-		//performs read operation to the SPI Interface.
-		//if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,wTotalLen,wTotalLen))
-		//{if(i%16 == 0)
-		//		printf("\n");
-		//	printf("SPI Transfer read failed \n");
-		//	exit (1);
-		//}
-
-		//performs read operation to the SPI Interface.	//SB
-		if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,DataLen,wTotalLen+5))
-		{
-			printf("SPI Transfer read failed \n");
-			exit (1);
-		}
-
-		//if(FALSE == SandiaBlockSpiRead(hDevice, (UINT8*)byBuffer, byReadBuffer, DataLen, wTotalLen))
-		//{
-		//	printf("SPI Block read failed \n");
-		//	exit (1);
-		//}
-
-		/*printf("String length sztext: %d\n", strlen(sztext));
-		for(UINT8 i =1; i< wTotalLen+1; i++)
-		{
-			sprintf(chText,"0x%02x",byReadBuffer[i] );
-			strcat(sztext,chText);
-			printf("String length chText: %d sztext: %d\n", strlen(chText),strlen(sztext));
-			//if (strlen(sztext) == 2060)
-			//	break;
-		}*/
-
-		//printf("%s",sztext);
-
-		//Disable the SPI interface.
-		if(FALSE == MchpUsbSpiSetConfig (hDevice,0))
-		{
-			printf ("Error: SPI Pass thru enter failed:\n");
-			exit (1);
-		}
-
-		for(UINT16 i =1; i<wTotalLen+1; i++)
-		{
-			printf("0x%02x  ",byReadBuffer[i]);
-			if(i%16 == 0)
-				printf("\n");
-		}
-		printf("\n");
-		}
 		/*******************************************************/
 
 		if (byBuffer[0] == 0x06)
