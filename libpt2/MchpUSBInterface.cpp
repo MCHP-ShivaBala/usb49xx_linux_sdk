@@ -28,8 +28,6 @@ ADD LICENSE
 #define min(a,b)							(((a) < (b)) ? (a) : (b))
 #define MICROCHIP_HUB_VID						0x424
 
-
-
 #define VID_MICROCHIP							0x0424
 #define PID_HCE_DEVICE							0x494A
 
