@@ -337,11 +337,31 @@ int main (int argc, char* argv[])
     				exit (1);
     			}
 
-                if(FALSE == MchpUsbSpiTransfer(hDevice,0,byWriteBuffer,256+4,256+4)) //write
-    			{
-    				printf("SPI Transfer write failed \n");
-    				exit (1);
-    			}
+                if(i == NumPageWrites)
+                {
+                    /*Copying the remaining binary data into write buffer when data lenth < 256 bytes*/
+                    memcpy((void *)&byWriteBuffer[4], (const void *)&pbyBuffer[i*256], RemainderBytes);
+
+                    /*Writing a remaining bytes in the last page*/
+                    if(FALSE == MchpUsbSpiTransfer(hDevice,0,byWriteBuffer,RemainderBytes+4,RemainderBytes+4)) //write
+        			{
+        				printf("SPI Transfer write failed \n");
+        				exit (1);
+        			}
+
+                }
+                else
+                {
+                    /*Copying a page length of binary data into write buffer*/
+                    memcpy((void *)&byWriteBuffer[4], (const void *)&pbyBuffer[i*256], 256);
+
+                    /*Writing a 256 byte page*/
+                    if(FALSE == MchpUsbSpiTransfer(hDevice,0,byWriteBuffer,256+4,256+4)) //write
+                    {
+                        printf("SPI Transfer write failed \n");
+                        exit (1);
+                    }
+                }
 
                 //Check if the flash is BUSY
                 byBuffer[0] = 0x05;
