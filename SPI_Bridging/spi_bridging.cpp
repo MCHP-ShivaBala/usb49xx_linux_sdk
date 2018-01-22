@@ -29,20 +29,19 @@ using namespace std;
 
 int main (int argc, char* argv[])
 {
-	CHAR sztext[3072];
-	CHAR chText[512];
+	char sztext[1024];
+	// CHAR chText[512];
 	DWORD dwError = 0;
 	WORD vendor_id = 0x424 ,product_id= 0x4504;
 	BYTE byOperation;
     uint32_t byStartAddr = 0;
 	HANDLE hDevice =  INVALID_HANDLE_VALUE;
-	UINT8 byLength;
+	// UINT8 byLength;
 
     uint8_t  pbyBuffer[256 * 1024]; //SB
 	int32_t wDataLength;
-	// BYTE byReadFirmwareData[64 * 1024];
     uint8_t byReadFirmwareData[256 * 1024]; //SB
-	string sFirmwareFile;
+    char *sFirmwareFile;
 
 	uint8_t byBuffer[5] = {0,0,0,0}; //SB
 	uint16_t DataLen;
@@ -62,8 +61,8 @@ int main (int argc, char* argv[])
 		printf("Usage: ./spiBridging VID(Hex) PID(Hex) DevicePath(String) Operation(0x01) FirmwareFile \n");
 		printf("Example: ./spiBridging 0x424 0x4916 \"1:2\" 0x01 USB49XX_SILICON_CarLife_SPI_V1.27.bin \n \n");
 		printf("Operation : Read \n");
-		printf("Usage: ./spiBridging VID(Hex) PID(Hex) DevicePath(String) Operation(0x00) StartAddress Length \n");
-		printf("Example: ./spiBridging 0x424 0x4916 \"1:2\" 0x00 0x00 512 \n\n");
+		printf("Usage: ./spiBridging VID(Hex) PID(Hex) DevicePath(String) Operation(0x00) FirmwareFile \n");
+		printf("Example: ./spiBridging 0x424 0x4916 \"1:2\" 0x00 0x00 flash_dump.bin \n\n");
 		printf("Operation : Transfer\n");
 		printf("Usage: ./spiBridging VID(Hex) PID(Hex) DevicePath(String) Operation(0x03) Command DataLength TotalLength\n");
 		printf("Example: ./spiBridging 0x0424 0x4504 8 0x03 0x9f 1 4 \n\n");
@@ -85,9 +84,6 @@ int main (int argc, char* argv[])
 
 		if(byOperation == 0x00) // Read.
 		{
-			// byStartAddr=  strtol (argv[5], NULL, 0);
-			// byLength   =  strtol (argv[6], NULL, 0) ;
-            // wTotalLen   =  strtol (argv[6], NULL, 0) ;
             sFirmwareFile = argv[5];
             byStartAddr = 0x00;
 		}
@@ -98,7 +94,6 @@ int main (int argc, char* argv[])
 		}
 		else if(byOperation == 0x03) //Transfer
 		{
-			//byBuffer = strtol (argv[5],NULL,0);
 			byBuffer[0] = strtol (argv[5],NULL,0);	//SB
 			DataLen	 = strtol (argv[6],NULL,0);
 			wTotalLen = strtol (argv[7],NULL,0);
@@ -273,7 +268,8 @@ int main (int argc, char* argv[])
         // }
         // printf("\n");
 
-        if(writeBinfile(sFirmwareFile.c_str(), byReadFirmwareData, wDataLength) < 0)
+        //sFirmwareFile.c_str()
+        if(writeBinfile(sFirmwareFile, byReadFirmwareData, wDataLength) < 0)
         {
             printf("Failed to create binary file\n");
         }
@@ -298,7 +294,7 @@ int main (int argc, char* argv[])
 	else //Transfer
 	{
         //Read the bin file into local Buffer
-        wDataLength = ReadBinfile(sFirmwareFile.c_str(),pbyBuffer);
+        wDataLength = ReadBinfile(sFirmwareFile,pbyBuffer);
         if(wDataLength <=0)
         {
             printf("Failed to Read Content of File\n");
