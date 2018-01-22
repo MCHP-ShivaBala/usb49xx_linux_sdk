@@ -16,7 +16,6 @@ ADD LICENSE
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <stdio.h>*
 #include <iostream>
 #include <stdbool.h>
 
@@ -41,12 +40,13 @@ int main (int argc, char* argv[])
 
     uint8_t  pbyBuffer[256 * 1024]; //SB
 	int32_t wDataLength;
-	BYTE byReadFirmwareData[64 * 1024];
+	// BYTE byReadFirmwareData[64 * 1024];
+    uint8_t byReadFirmwareData[256 * 1024]; //SB
 	string sFirmwareFile;
 
-	UINT8 byBuffer[4] = {0,0,0,0}; //SB
-	UINT16 DataLen;
-	UINT32 wTotalLen;
+	uint8_t byBuffer[5] = {0,0,0,0}; //SB
+	uint16_t DataLen;
+	uint16_t wTotalLen;
 
     uint8_t byReadBuffer[517];
     uint8_t byWriteBuffer[260] = {0x02};
@@ -85,7 +85,7 @@ int main (int argc, char* argv[])
 
 		if(byOperation == 0x00) // Read.
 		{
-			byStartAddr=  strtol (argv[5], NULL, 0) ;
+			byStartAddr=  strtol (argv[5], NULL, 0);
 			// byLength   =  strtol (argv[6], NULL, 0) ;
             wTotalLen   =  strtol (argv[6], NULL, 0) ;
 		}
@@ -168,39 +168,50 @@ int main (int argc, char* argv[])
         //	printf("SPI Transfer write failed \n");
         //	exit (1);
         //}
+        byStartAddr = 0;
+        wDataLength = 256*1024;
+        NumPageWrites = wDataLength / 512;
+        RemainderBytes = wDataLength % 512;
 
-        byBuffer[0] = 0x0B;
-        //performs write operation to the SPI Interface.	//SB
-        if(FALSE == MchpUsbSpiTransfer(hDevice,0,byBuffer,4,wTotalLen+5)) //write
+
+        for(uint16_t i=0; i<NumPageWrites; i++)
         {
-            printf("SPI Transfer write failed \n");
-            exit (1);
-        }
+            byBuffer[0] = 0x0B;
+            byBuffer[1] = (byStartAddr & 0xFF0000) >> 16; //SB
+            byBuffer[2] = (byStartAddr & 0x00FF00) >> 8; //SB
+            byBuffer[3] = byStartAddr & 0x0000FF; //SB
 
-        //performs read operation to the SPI Interface.
-        //if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,wTotalLen,wTotalLen))
-        //{if(i%16 == 0)
-        //		printf("\n");
-        //	printf("SPI Transfer read failed \n");
-        //	exit (1);
-        //}
+            //performs write operation to the SPI Interface.	//SB
+            if(FALSE == MchpUsbSpiTransfer(hDevice,0,byBuffer,4,wTotalLen+5)) //write
+            {
+                printf("SPI Transfer write failed \n");
+                exit (1);
+            }
 
-        //performs read operation to the SPI Interface.	//SB
-        if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,DataLen,wTotalLen+5))
-        {
-            printf("SPI Transfer read failed \n");
-            exit (1);
-        }
+            //performs read operation to the SPI Interface.
+            //if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,wTotalLen,wTotalLen))
+            //{if(i%16 == 0)
+            //		printf("\n");
+            //	printf("SPI Transfer read failed \n");
+            //	exit (1);
+            //}
 
-        //if(FALSE == SandiaBlockSpiRead(hDevice, (UINT8*)byBuffer, byReadBuffer, DataLen, wTotalLen))
-        //{
-        //	printf("SPI Block read failed \n");
-        //	exit (1);
-        //}
+            //performs read operation to the SPI Interface.	//SB
+            if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,DataLen,wTotalLen+5))
+            {
+                printf("SPI Transfer read failed \n");
+                exit (1);
+            }
 
-        /*printf("String length sztext: %d\n", strlen(sztext));
-        for(UINT8 i =1; i< wTotalLen+1; i++)
-        {
+            //if(FALSE == SandiaBlockSpiRead(hDevice, (UINT8*)byBuffer, byReadBuffer, DataLen, wTotalLen))
+            //{
+            //	printf("SPI Block read failed \n");
+            //	exit (1);
+            //}
+
+            /*printf("String length sztext: %d\n", strlen(sztext));
+            for(UINT8 i =1; i< wTotalLen+1; i++)
+            {
             sprintf(chText,"0x%02x",byReadBuffer[i] );
             strcat(sztext,chText);
             printf("String length chText: %d sztext: %d\n", strlen(chText),strlen(sztext));
@@ -208,7 +219,33 @@ int main (int argc, char* argv[])
             //	break;
         }*/
 
-        //printf("%s",sztext);
+            //printf("%s",sztext);
+
+            /**/
+            memcpy((void *)&byReadFirmwareData[i*512], (const void *)&byReadBuffer[1], 512);
+
+            //Check if the flash is BUSY
+            byBuffer[0] = 0x05;
+            do
+            {
+                //performs write operation to the SPI Interface.	//SB
+                if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,2)) //write
+                {
+                    printf("SPI Transfer write failed \n");
+                    exit (1);
+                }
+
+                if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,DataLen,1))
+                {
+                    printf("SPI Transfer read failed \n");
+                    exit (1);
+                }
+                printf("Reading page %d at addr 0x%06x...SR = %02x\n",i,byStartAddr,byReadBuffer[0]);
+
+            }while(byReadBuffer[0] != 0x00);
+
+            byStartAddr += 512;
+        }
 
         //Disable the SPI interface.
         if(FALSE == MchpUsbSpiSetConfig (hDevice,0))
@@ -217,13 +254,27 @@ int main (int argc, char* argv[])
             exit (1);
         }
 
-        for(UINT16 i =1; i<wTotalLen+1; i++)
+        // for(UINT16 i =1; i<wTotalLen+1; i++)
+        // {
+        //     printf("0x%02x  ",byReadBuffer[i]);
+        //     if(i%16 == 0)
+        //     printf("\n");
+        // }
+        // printf("\n");
+
+        for(int32_t i =0; i<wDataLength; i++)
         {
-            printf("0x%02x  ",byReadBuffer[i]);
+            printf("0x%02x  ",byReadFirmwareData[i]);
             if(i%16 == 0)
-                printf("\n");
+            printf("\n");
         }
         printf("\n");
+
+        // if(writeBinfile(char const *name, uint8_t *buffer, unsigned long fileLen) < 0)
+        // {
+        //     printf("Failed to create binary file\n");
+        // }
+
 	}
 	// else if(byOperation == 0x01)//Write
 	// {
@@ -367,7 +418,7 @@ int main (int argc, char* argv[])
                     printf("SPI Transfer read failed \n");
                     exit (1);
                 }
-                printf("Writing page %d at addr %d...SR = %02x\n",i,byStartAddr,byReadBuffer[0]);
+                printf("Writing page %d at addr 0x%06x...SR = %02x\n",i,byStartAddr,byReadBuffer[0]);
 
             }while(byReadBuffer[0] == 0x83);
 
