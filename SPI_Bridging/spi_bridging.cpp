@@ -85,9 +85,11 @@ int main (int argc, char* argv[])
 
 		if(byOperation == 0x00) // Read.
 		{
-			byStartAddr=  strtol (argv[5], NULL, 0);
+			// byStartAddr=  strtol (argv[5], NULL, 0);
 			// byLength   =  strtol (argv[6], NULL, 0) ;
-            wTotalLen   =  strtol (argv[6], NULL, 0) ;
+            // wTotalLen   =  strtol (argv[6], NULL, 0) ;
+            sFirmwareFile = argv[5];
+            byStartAddr = 0x00;
 		}
 		else if(byOperation == 0x01) //Write
 		{
@@ -172,6 +174,7 @@ int main (int argc, char* argv[])
         wDataLength = 256*1024;
         NumPageWrites = wDataLength / 512;
         RemainderBytes = wDataLength % 512;
+        wTotalLen = 512;
 
 
         for(uint16_t i=0; i<NumPageWrites; i++)
@@ -262,18 +265,18 @@ int main (int argc, char* argv[])
         // }
         // printf("\n");
 
-        for(int32_t i =0; i<wDataLength; i++)
-        {
-            printf("0x%02x  ",byReadFirmwareData[i]);
-            if(i%16 == 0)
-            printf("\n");
-        }
-        printf("\n");
-
-        // if(writeBinfile(char const *name, uint8_t *buffer, unsigned long fileLen) < 0)
+        // for(int32_t i =0; i<wDataLength; i++)
         // {
-        //     printf("Failed to create binary file\n");
+        //     printf("0x%02x  ",byReadFirmwareData[i]);
+        //     if(i%16 == 0)
+        //     printf("\n");
         // }
+        // printf("\n");
+
+        if(writeBinfile(sFirmwareFile.c_str(), byReadFirmwareData, wDataLength) < 0)
+        {
+            printf("Failed to create binary file\n");
+        }
 
 	}
 	// else if(byOperation == 0x01)//Write
