@@ -30,30 +30,27 @@ using namespace std;
 int main (int argc, char* argv[])
 {
 	char sztext[1024];
-	// CHAR chText[512];
+
 	DWORD dwError = 0;
-	WORD vendor_id = 0x424 ,product_id= 0x4504;
-	BYTE byOperation;
+	uint16_t vendor_id = 0x424 ,product_id= 0x4504;
+	uint8_t byOperation;
     uint32_t byStartAddr = 0;
-	HANDLE hDevice =  INVALID_HANDLE_VALUE;
-	// UINT8 byLength;
+	uint8_t hDevice =  INVALID_HANDLE_VALUE;
 
     uint8_t  pbyBuffer[256 * 1024]; //SB
 	int32_t wDataLength;
-    uint8_t byReadFirmwareData[256 * 1024]; //SB
     char *sFirmwareFile;
 
 	uint8_t byBuffer[5] = {0,0,0,0}; //SB
-	uint16_t DataLen;
-	uint16_t wTotalLen;
+	uint16_t DataLen, wTotalLen;
 
     uint8_t byReadBuffer[517];
     uint8_t byWriteBuffer[260] = {0x02};
 	char path[20] = {0};
-	int hub_count = 0;
+	uint8_t hub_count = 0;
 
-    uint16_t NumPageWrites;
-    uint8_t RemainderBytes;
+    uint16_t NumPageWrites = 0;
+    uint8_t RemainderBytes = 0;
 
 	if((0 == strcmp(argv[1],"--help")) || (0 == strcmp(argv[1],"/?")))  //Help
 	{
@@ -77,7 +74,7 @@ int main (int argc, char* argv[])
 	}
 	else
 	{
-		vendor_id  =  strtol (argv[1], NULL, 0) ;             //Getting vid and Pid from commandline arguments.
+		vendor_id  =  strtol (argv[1], NULL, 0) ;          //Getting vid and Pid from commandline arguments.
 		product_id =  strtol (argv[2], NULL, 0) ;
 		strcpy(path,argv[3]);
 		byOperation=  strtol (argv[4], NULL, 0) ;
@@ -139,19 +136,6 @@ int main (int argc, char* argv[])
 
 	if(byOperation == 0x00) //Read
 	{
-		// //Performs read operation from SPI Flash.
-		// if(FALSE == MchpUsbSpiFlashRead(hDevice,byStartAddr, &byReadFirmwareData[0],byLength))
-		// {
-		// 	printf ("\nError: Read Failed:\n");
-		// 	exit (1);
-		// }
-		// for(UINT8 i =0; i< byLength; i++)
-		// {
-		// 	sprintf(chText,"0x%02x \t",byReadFirmwareData[i] );
-		// 	strcat(sztext,chText);
-		// }
-		// printf("%s \n",sztext);
-
         //Enable the SPI interface.
         if(FALSE == MchpUsbSpiSetConfig (hDevice,1))
         {
@@ -159,12 +143,6 @@ int main (int argc, char* argv[])
             exit (1);
         }
 
-        //performs write operation to the SPI Interface.
-        //if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer,DataLen,wTotalLen)) //write
-        //{
-        //	printf("SPI Transfer write failed \n");
-        //	exit (1);
-        //}
         byStartAddr = 0;
         wDataLength = 256*1024;
         NumPageWrites = wDataLength / 512;
@@ -186,14 +164,6 @@ int main (int argc, char* argv[])
                 exit (1);
             }
 
-            //performs read operation to the SPI Interface.
-            //if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,wTotalLen,wTotalLen))
-            //{if(i%16 == 0)
-            //		printf("\n");
-            //	printf("SPI Transfer read failed \n");
-            //	exit (1);
-            //}
-
             //performs read operation to the SPI Interface.	//SB
             if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,DataLen,wTotalLen+5))
             {
@@ -201,26 +171,8 @@ int main (int argc, char* argv[])
                 exit (1);
             }
 
-            //if(FALSE == SandiaBlockSpiRead(hDevice, (UINT8*)byBuffer, byReadBuffer, DataLen, wTotalLen))
-            //{
-            //	printf("SPI Block read failed \n");
-            //	exit (1);
-            //}
-
-            /*printf("String length sztext: %d\n", strlen(sztext));
-            for(UINT8 i =1; i< wTotalLen+1; i++)
-            {
-            sprintf(chText,"0x%02x",byReadBuffer[i] );
-            strcat(sztext,chText);
-            printf("String length chText: %d sztext: %d\n", strlen(chText),strlen(sztext));
-            //if (strlen(sztext) == 2060)
-            //	break;
-        }*/
-
-            //printf("%s",sztext);
-
-            /**/
-            memcpy((void *)&byReadFirmwareData[i*512], (const void *)&byReadBuffer[1], 512);
+            /*Copying the block of data read into local buffer for writing to binary file*/
+            memcpy((void *)&pbyBuffer[i*512], (const void *)&byReadBuffer[1], 512);
 
             //Check if the flash is BUSY
             byBuffer[0] = 0x05;
@@ -252,31 +204,14 @@ int main (int argc, char* argv[])
             exit (1);
         }
 
-        // for(UINT16 i =1; i<wTotalLen+1; i++)
-        // {
-        //     printf("0x%02x  ",byReadBuffer[i]);
-        //     if(i%16 == 0)
-        //     printf("\n");
-        // }
-        // printf("\n");
-
-        // for(int32_t i =0; i<wDataLength; i++)
-        // {
-        //     printf("0x%02x  ",byReadFirmwareData[i]);
-        //     if(i%16 == 0)
-        //     printf("\n");
-        // }
-        // printf("\n");
-
-        //sFirmwareFile.c_str()
-        if(writeBinfile(sFirmwareFile, byReadFirmwareData, wDataLength) < 0)
+        if(writeBinfile(sFirmwareFile, pbyBuffer, wDataLength) < 0)
         {
             printf("Failed to create binary file\n");
         }
 
 	}
-	// else if(byOperation == 0x01)//Write
-	// {
+	else if(byOperation == 0x01)//Write
+	{
 	// 	//Read the content of the file.
 	// 	wDataLength = ReadBinfile(sFirmwareFile.c_str(),pbyBuffer);
 	// 	if(wDataLength <=0)
@@ -290,9 +225,7 @@ int main (int argc, char* argv[])
 	// 		printf ("\nError: Write Failed:\n");
 	// 		exit (1);
 	// 	}
-	// }
-	else //Transfer
-	{
+
         //Read the bin file into local Buffer
         wDataLength = ReadBinfile(sFirmwareFile,pbyBuffer);
         if(wDataLength <=0)
@@ -439,8 +372,12 @@ int main (int argc, char* argv[])
             printf ("Error: SPI Pass thru enter failed:\n");
             exit (1);
         }
+	}
+	else //Transfer
+	{
 
 	}
+
 	//close device handle
 	if(FALSE == MchpUsbClose(hDevice))
 	{

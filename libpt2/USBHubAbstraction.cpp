@@ -11,7 +11,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <math.h>
-// #include "USB2530_SpiFlash.h"
 #include "MchpUSBInterface.h"
 #include "USBHubAbstraction.h"
 
