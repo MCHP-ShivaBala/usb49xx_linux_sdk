@@ -64,6 +64,7 @@ extern "C" {
 #define MY_MAX_PATH   						1024*8
 #define MAX_HUBS 						20
 #define CTRL_TIMEOUT 						(5*1000) /* milliseconds */
+#define MAX_FW_SIZE					        (256 * 1024)    //SB
 
 #define DEBUG
 #ifdef DEBUG
@@ -753,9 +754,6 @@ int MchpGetHubList(PCHAR HubInfo );
 
  ***************************************************************************************************************************/
 // BOOL MchpProgramFile( HANDLE DevID, PCHAR InputFileName);
-
-
-BOOL SandiaBlockSpiRead(HANDLE DevID,UINT8* CmdBuffer, UINT8* DataBuffer, UINT16 DataLength,UINT32 TotalLength);
 
 
 #ifdef __cplusplus

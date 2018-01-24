@@ -19,7 +19,6 @@ ADD LICENSE
 //PT2 SDK Header file.
 #include "typedef.h"
 #include "MchpUSBInterface.h"
-// #include "USB2530_SpiFlash.h"
 #include "USBHubAbstraction.h"
 
 //DLL Exports
@@ -33,7 +32,6 @@ ADD LICENSE
 
 #define CMD_SPI_PASSTHRU_ENTER				0x60  //SB
 #define CMD_SPI_PASSTHRU_EXIT				0x62  //SB
-#define MAX_FW_SIZE					        (128 * 1024)    //SB
 
 //OTP
 #define OTP_DATA_START_ADDRESS						0x0002
@@ -44,14 +42,27 @@ ADD LICENSE
 
 #define PT2_LIB_VER							"1.23"
 
-#define CTRL_RETRIES 							2
+// #define CTRL_RETRIES 							2
 #define HUB_STATUS_BYTELEN						3 /* max 3 bytes status = hub + 23 ports */
-#define HUB_DESC_NUM_PORTS_OFFSET					2
+// #define HUB_DESC_NUM_PORTS_OFFSET					2
+#define HUB_SKUs                                6
 
 
 #define logprint(x, ...) do { \
 		printf(__VA_ARGS__); \
 		fprintf(x,  __VA_ARGS__); \
+
+//SPI fLASH Specific Macros
+#define WRITE_BLOCK_SIZE                    256
+#define READ_BLOCK_SIZE                     512
+#define READ_JEDEC_ID					    0x9F
+#define	WREN							    0x06
+#define WRDIS                               0X04
+#define	RDSR								0x05
+#define ULBPR								0x98
+#define CHIP_ERASE							0xC7
+#define PAGE_PROG							0x02
+#define HS_READ                             0x0B
 
 //OTP
 // typedef struct tagOtpCfgChecksumA
@@ -90,6 +101,8 @@ int xdata_write(HANDLE handle, uint16_t wAddress, uint8_t *data, uint8_t num_byt
 HINFO gasHubInfo [MAX_HUBS];
 /* Context Variable used for initializing LibUSB session */
 libusb_context *ctx = NULL;
+/*List of possible PIDs for USB491X/USB471X HFCs*/
+// uint16_t PID_HCE_DEVICE[HUB_SKUs] = {0x4940, 0x494A, 0x494B, 0x494C, 0x494E, 0x494F};
 
 /*-----------------------API functions --------------------------*/
 BOOL  MchpUsbGetVersion ( PCHAR pchVersionNo )
@@ -118,61 +131,61 @@ int MchpGetHubList(PCHAR pchHubcount )
 }
 
 //Return handle to the first instance of VendorID &amp; ProductID matched device.
-HANDLE  MchpUsbOpenID ( UINT16 wVID, UINT16 wPID)
-{
-	int error = 0, hub_cnt=0, hub_index=0;
-	int restart_count=5;
-	bool bhub_found = false;
-
-	//Get the list of the hubs from the device.
-	hub_cnt = usb_get_hubs(&gasHubInfo[0]);
-	do
-	{
-		if((gasHubInfo[hub_index].wVID == wVID) && (gasHubInfo[hub_index].wPID == wPID))
-		{
-			bhub_found = true;
-			break;
-		}
-
-	}
-	while(hub_index++ < hub_cnt);
-
-	if(false == bhub_found)
-	{
-		DEBUGPRINT("MCHP_Error_Device_Not_Found \n");
-		return INVALID_HANDLE_VALUE;
-	}
-
-	error = usb_open_HCE_device(hub_index);
-	if(error < 0)
-	{
-
-		//enable 5th Endpoit
-		error = usb_enable_HCE_device(hub_index);
-
-		if(error < 0)
-		{
-			DEBUGPRINT("MCHP_Error_Invalid_Device_Handle: Failed to Enable the device \n");
-			return INVALID_HANDLE_VALUE;
-		}
-		do
-		{
-			sleep(2);
-			error = usb_open_HCE_device(hub_index);
-			if(error == 0)
-			{
-				return hub_index;
-			}
-
-		}while(restart_count--);
-
-		DEBUGPRINT("MCHP_Error_Invalid_Device_Handle: Failed to open the device error:%d\n",error);
-		return INVALID_HANDLE_VALUE;
-	}
-
-
-	return hub_index;
-}
+// HANDLE  MchpUsbOpenID ( UINT16 wVID, UINT16 wPID)
+// {
+// 	int error = 0, hub_cnt=0, hub_index=0;
+// 	int restart_count=5;
+// 	bool bhub_found = false;
+//
+// 	//Get the list of the hubs from the device.
+// 	hub_cnt = usb_get_hubs(&gasHubInfo[0]);
+// 	do
+// 	{
+// 		if((gasHubInfo[hub_index].wVID == wVID) && (gasHubInfo[hub_index].wPID == wPID))
+// 		{
+// 			bhub_found = true;
+// 			break;
+// 		}
+//
+// 	}
+// 	while(hub_index++ < hub_cnt);
+//
+// 	if(false == bhub_found)
+// 	{
+// 		DEBUGPRINT("MCHP_Error_Device_Not_Found \n");
+// 		return INVALID_HANDLE_VALUE;
+// 	}
+//
+// 	error = usb_open_HCE_device(hub_index);
+// 	if(error < 0)
+// 	{
+//
+// 		//enable 5th Endpoit
+// 		error = usb_enable_HCE_device(hub_index);
+//
+// 		if(error < 0)
+// 		{
+// 			DEBUGPRINT("MCHP_Error_Invalid_Device_Handle: Failed to Enable the device \n");
+// 			return INVALID_HANDLE_VALUE;
+// 		}
+// 		do
+// 		{
+// 			sleep(2);
+// 			error = usb_open_HCE_device(hub_index);
+// 			if(error == 0)
+// 			{
+// 				return hub_index;
+// 			}
+//
+// 		}while(restart_count--);
+//
+// 		DEBUGPRINT("MCHP_Error_Invalid_Device_Handle: Failed to open the device error:%d\n",error);
+// 		return INVALID_HANDLE_VALUE;
+// 	}
+//
+//
+// 	return hub_index;
+// }
 
 //Return handle to the first instance of VendorID &amp; ProductID &amp; port path matched device.
 HANDLE  MchpUsbOpen ( UINT16 wVID, UINT16 wPID,char* cDevicePath)
@@ -312,8 +325,9 @@ BOOL MchpUsbSpiSetConfig ( HANDLE DevID, INT EnterExit)
 	}
 	return bRet;
 }
-BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 BytesToRead)
-{
+
+// BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 BytesToRead)
+// {
 	// BOOL bRet = FALSE;
     //
 	// if ((StartAddr + BytesToRead) > MAX_FW_SIZE)
@@ -334,7 +348,85 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
 	// 	bRet = TRUE;
 	// }
 	// return bRet;
+// }
+
+/*New Definition - Pre-req: Hub needs to be open*/
+BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 BytesToRead)
+{
+    uint16_t NumPageWrites = 0;
+    uint8_t RemainderBytes = 0;
+    uint8_t byReadBuffer[READ_BLOCK_SIZE+5];
+    uint8_t byBuffer[4] = {0,0,0,0};
+
+    //Enable the SPI interface.
+    if(FALSE == MchpUsbSpiSetConfig (DevID,1))
+    {
+        printf ("\nError: SPI Pass thru enter failed:\n");
+        exit (1);
+    }
+
+    NumPageWrites = MAX_FW_SIZE / READ_BLOCK_SIZE;
+    RemainderBytes = MAX_FW_SIZE % READ_BLOCK_SIZE;
+
+    for(uint16_t i=0; i<NumPageWrites; i++)
+    {
+        byBuffer[0] = HS_READ;
+        byBuffer[1] = (StartAddr & 0xFF0000) >> 16; //SB
+        byBuffer[2] = (StartAddr & 0x00FF00) >> 8; //SB
+        byBuffer[3] = StartAddr & 0x0000FF; //SB
+
+        //performs write operation to the SPI Interface.	//SB
+        if(FALSE == MchpUsbSpiTransfer(DevID,0,byBuffer,4,READ_BLOCK_SIZE+5)) //write
+        {
+            printf("SPI Transfer write failed \n");
+            exit (1);
+        }
+
+        //performs read operation to the SPI Interface.	//SB
+        if(FALSE == MchpUsbSpiTransfer(DevID,1,(uint8_t *)&byReadBuffer,READ_BLOCK_SIZE,READ_BLOCK_SIZE+5)) //parameter3 is don't care
+        {
+            printf("SPI Transfer read failed \n");
+            exit (1);
+        }
+
+        /*Copying the block of data read into local buffer for writing to binary file*/
+        memcpy((void *)&InputData[i*512], (const void *)&byReadBuffer[1], 512);
+
+        //Check if the flash is BUSY
+        byBuffer[0] = 0x05;
+        do
+        {
+            //performs write operation to the SPI Interface.	//SB
+            if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,2)) //write
+            {
+                printf("SPI Transfer write failed \n");
+                exit (1);
+            }
+
+            if(FALSE == MchpUsbSpiTransfer(DevID,1,(uint8_t *)&byReadBuffer,2,1)) //parameter3 is don't care
+            {
+                printf("SPI Transfer read failed \n");
+                exit (1);
+            }
+            printf("Reading page %d at addr 0x%06x...SR = %02x\n",i,StartAddr,byReadBuffer[0]);
+
+        }while(byReadBuffer[0] != 0x00);
+
+        StartAddr += READ_BLOCK_SIZE;
+    }
+
+    //Disable the SPI interface.
+    if(FALSE == MchpUsbSpiSetConfig (DevID,0))
+    {
+        printf ("Error: SPI Pass thru enter failed:\n");
+        exit (1);
+    }
+
+    return TRUE;
 }
+
+
+
 BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT32 BytesToWrite)
 {
 	// BOOL bRet = FALSE;
@@ -401,36 +493,6 @@ BOOL MchpUsbSpiTransfer(HANDLE DevID,INT Direction,UINT8* Buffer, UINT16 DataLen
 		DEBUGPRINT("SPI Transfer success\n");
 		return TRUE;
 	}
-}
-
-BOOL SandiaBlockSpiRead(HANDLE DevID,UINT8* CmdBuffer, UINT8* DataBuffer, UINT16 DataLength,UINT32 TotalLength)
-{
-	int bRetVal = FALSE;
-	if(nullptr == CmdBuffer || nullptr == DataBuffer)
-	{
-		DEBUGPRINT("SPI Transfer failed: NULL pointer");
-		return FALSE;
-	}
-
-	bRetVal = libusb_control_transfer((libusb_device_handle*)gasHubInfo[DevID].handle,0x41,0x61,TotalLength+5,0,CmdBuffer,
-				DataLength,CTRL_TIMEOUT);
-	if(bRetVal <0 )
-	{
-		DEBUGPRINT("SETUP: SPI Transfer Failed \n");
-		return FALSE;
-	}
-
-	//bRetVal = libusb_control_transfer((libusb_device_handle*)gasHubInfo[DevID].handle,0xC1,0x04,0x2440,0xBF80,DataBuffer,
-	//						TotalLength+5,CTRL_TIMEOUT);
-	bRetVal = libusb_control_transfer((libusb_device_handle*)gasHubInfo[DevID].handle,0xC0,0x04,0x2310,0xBFD2,DataBuffer,
-												TotalLength+5,CTRL_TIMEOUT);
-	if(bRetVal <0 )
-	{
-		DEBUGPRINT("READ: SPI Transfer Failed \n");
-		return FALSE;
-	}
-
-	return TRUE;
 }
 
 // BOOL MchpProgramFile( HANDLE DevID, PCHAR InputFileName)
@@ -842,7 +904,7 @@ static int usb_open_HCE_device(uint8_t hub_index)
 
 	int dRetval = 0;
 	ssize_t devCnt = 0, port_cnt = 0;
-	ssize_t i = 0, j = 0;
+	ssize_t i = 0, j = 0, k=0;
 	uint8_t port_list[7];
 
 	devCnt = libusb_get_device_list(ctx, &devices);
@@ -864,85 +926,88 @@ static int usb_open_HCE_device(uint8_t hub_index)
 			continue;
 		}
 
-		if(PID_HCE_DEVICE == desc.idProduct)
-		{
-			dRetval = libusb_open(dev, &handle);
-			if(dRetval < 0)
-			{
-				DEBUGPRINT("HCE Device open failed \n");
-				continue;
-			}
+        // for(k = 0; k < HUB_SKUs; k++)
+        // {
+    		// if(PID_HCE_DEVICE[k] == desc.idProduct)
+            if(PID_HCE_DEVICE == desc.idProduct)
+    		{
+    			dRetval = libusb_open(dev, &handle);
+    			if(dRetval < 0)
+    			{
+    				DEBUGPRINT("HCE Device open failed \n");
+    				continue;
+    			}
 
-			port_cnt = libusb_get_port_numbers(dev, port_list, 7);
-			if(port_cnt <= 1)
-			{
-				DEBUGPRINT("Retrieving port numbers failed \n");
-				libusb_close(handle);
-				continue;
-			}
+    			port_cnt = libusb_get_port_numbers(dev, port_list, 7);
+    			if(port_cnt <= 1)
+    			{
+    				DEBUGPRINT("Retrieving port numbers failed \n");
+    				libusb_close(handle);
+    				continue;
+    			}
 
-			//it is comapring against hub port count not HCE
-			if(gasHubInfo[hub_index].port_max != (port_cnt-1))
-			{
-				DEBUGPRINT("Hub port match failed with Hub the Index:%d\n",hub_index);
-				libusb_close(handle);
-                                continue;
+    			//it is comapring against hub port count not HCE
+    			if(gasHubInfo[hub_index].port_max != (port_cnt-1))
+    			{
+    				DEBUGPRINT("Hub port match failed with Hub the Index:%d\n",hub_index);
+    				libusb_close(handle);
+                                    continue;
 
-			}
+    			}
 
-			//Match with the hub port list
-			for(j = 0; j < gasHubInfo[hub_index].port_max; j++)
-			{
-				if(gasHubInfo[hub_index].port_list[j] != port_list[j])
-				{
-					DEBUGPRINT("Hub port match failed with Hub Index:%d\n",hub_index);
-					dRetval = -1;
-					break;
-				}
-			}
+    			//Match with the hub port list
+    			for(j = 0; j < gasHubInfo[hub_index].port_max; j++)
+    			{
+    				if(gasHubInfo[hub_index].port_list[j] != port_list[j])
+    				{
+    					DEBUGPRINT("Hub port match failed with Hub Index:%d\n",hub_index);
+    					dRetval = -1;
+    					break;
+    				}
+    			}
 
-			if(dRetval == -1)
-			{
-				libusb_close(handle);
-				continue;
-			}
+    			if(dRetval == -1)
+    			{
+    				libusb_close(handle);
+    				continue;
+    			}
 
-			printf("HCE Hub index=%d Path- ",hub_index);
-			for(i = 0; i < port_cnt; i++)
-			{
-				printf(":%d", (unsigned int)(port_list[i]));
-			}
-			printf("\n");
+    			printf("HCE Hub index=%d Path- ",hub_index);
+    			for(j = 0; j < port_cnt; j++)
+    			{
+    				printf(":%d", (unsigned int)(port_list[j]));
+    			}
+    			printf("\n");
 
 
-			if(libusb_kernel_driver_active(handle, 0) == 1)
-			{
-				//DEBUGPRINT("Kernel has attached a driver, detaching it \n");
-				if(libusb_detach_kernel_driver(handle, 0) != 0)
-				{
-					DEBUGPRINT("Cannot detach kerenl driver. USB device may not respond \n");
-					libusb_close(handle);
-					break;
-				}
-			}
+    			if(libusb_kernel_driver_active(handle, 0) == 1)
+    			{
+    				//DEBUGPRINT("Kernel has attached a driver, detaching it \n");
+    				if(libusb_detach_kernel_driver(handle, 0) != 0)
+    				{
+    					DEBUGPRINT("Cannot detach kerenl driver. USB device may not respond \n");
+    					libusb_close(handle);
+    					break;
+    				}
+    			}
 
-			dRetval = libusb_claim_interface(handle, 0);
+    			dRetval = libusb_claim_interface(handle, 0);
 
-			if(dRetval < 0)
-			{
-				DEBUGPRINT("cannot claim intterface \n");
-				dRetval = -1;
-				libusb_close(handle);
-				break;
-			}
+    			if(dRetval < 0)
+    			{
+    				DEBUGPRINT("cannot claim intterface \n");
+    				dRetval = -1;
+    				libusb_close(handle);
+    				break;
+    			}
 
-			gasHubInfo[hub_index].dev = devices;
-			gasHubInfo[hub_index].handle = handle;
-			gasHubInfo[hub_index].byHubIndex = hub_index;
-			libusb_free_device_list(devices, 1);
-			return dRetval;
-
-		}
+    			gasHubInfo[hub_index].dev = devices;
+    			gasHubInfo[hub_index].handle = handle;
+    			gasHubInfo[hub_index].byHubIndex = hub_index;
+    			libusb_free_device_list(devices, 1);
+    			return dRetval;
+    		}
+        // }
 	}
 
 //	libusb_close(handle);
@@ -1172,23 +1237,23 @@ int xdata_write(HANDLE handle, uint16_t wAddress, uint8_t *data, uint8_t num_byt
 	return bRetVal;
 }
 
-// unsigned int CalculateNumberofOnes(unsigned int UINTVar)
-// {
-// 	unsigned int N0OfOnes = 0;
-// 	do
-// 	{
-// 		if(0x0000 == UINTVar) // variable if zero then return 0
-// 			break;
-// 		// Now counts 1's
-// 		while(UINTVar)
-// 		{
-// 			N0OfOnes++;
-// 			UINTVar &= (UINTVar -1);
-// 		}
-// 	}while(false);
-//
-// 	return N0OfOnes;
-// }
+unsigned int CalculateNumberofOnes(unsigned int UINTVar)
+{
+	unsigned int N0OfOnes = 0;
+	do
+	{
+		if(0x0000 == UINTVar) // variable if zero then return 0
+			break;
+		// Now counts 1's
+		while(UINTVar)
+		{
+			N0OfOnes++;
+			UINTVar &= (UINTVar -1);
+		}
+	}while(false);
+
+	return N0OfOnes;
+}
 
 //Return handle to the first instance of VendorID &amp; ProductID matched device.
 //VID and PID of Hub Feature Controller - by dealut vid:pid - 0x424:0x2530
