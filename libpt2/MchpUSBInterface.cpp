@@ -28,7 +28,7 @@ ADD LICENSE
 #define MICROCHIP_HUB_VID						0x424
 
 #define VID_MICROCHIP							0x0424
-#define PID_HCE_DEVICE							0x494A
+// #define PID_HCE_DEVICE							0x4940
 
 #define CMD_SPI_PASSTHRU_ENTER				0x60  //SB
 #define CMD_SPI_PASSTHRU_EXIT				0x62  //SB
@@ -102,7 +102,7 @@ HINFO gasHubInfo [MAX_HUBS];
 /* Context Variable used for initializing LibUSB session */
 libusb_context *ctx = NULL;
 /*List of possible PIDs for USB491X/USB471X HFCs*/
-// uint16_t PID_HCE_DEVICE[HUB_SKUs] = {0x4940, 0x494A, 0x494B, 0x494C, 0x494E, 0x494F};
+uint16_t PID_HCE_DEVICE[HUB_SKUs] = {0x4940, 0x494A, 0x494B, 0x494C, 0x494E, 0x494F};
 
 /*-----------------------API functions --------------------------*/
 BOOL  MchpUsbGetVersion ( PCHAR pchVersionNo )
@@ -926,10 +926,10 @@ static int usb_open_HCE_device(uint8_t hub_index)
 			continue;
 		}
 
-        // for(k = 0; k < HUB_SKUs; k++)
-        // {
-    		// if(PID_HCE_DEVICE[k] == desc.idProduct)
-            if(PID_HCE_DEVICE == desc.idProduct)
+        for(k = 0; k < HUB_SKUs; k++)
+        {
+    		if(PID_HCE_DEVICE[k] == desc.idProduct)
+            // if(PID_HCE_DEVICE == desc.idProduct)
     		{
     			dRetval = libusb_open(dev, &handle);
     			if(dRetval < 0)
@@ -1007,7 +1007,7 @@ static int usb_open_HCE_device(uint8_t hub_index)
     			libusb_free_device_list(devices, 1);
     			return dRetval;
     		}
-        // }
+        }
 	}
 
 //	libusb_close(handle);
