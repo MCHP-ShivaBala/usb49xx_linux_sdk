@@ -36,6 +36,7 @@ ADD LICENSE
 //OTP
 #define OTP_DATA_START_ADDRESS						0x0002
 #define BIG_ENDIAN_WORD(w) 						((((w)&0xFF)<<8) | (((w)&0xFF00) >> 8))
+#define CMD_OTP_RESET                       0x08
 
 #define CONVERT_ENDIAN_DWORD(w)	((((DWORD32)(w)) << 24) | (((DWORD32)(w) & 0xFF00) << 8) | \
 								 (((DWORD32)(w) & 0xFF0000) >> 8) | (((DWORD32)(w) & 0xFF000000) >> 24))
@@ -92,7 +93,7 @@ int  usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue
 int Read_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_bytes);
 int Write_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_bytes);
 int xdata_read(HANDLE handle, uint16_t wAddress, uint8_t *data, uint8_t num_bytes);
-int xdata_write(HANDLE handle, uint16_t wAddress, uint8_t *data, uint8_t num_bytes);
+int xdata_write(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_bytes);
 
 // //OTP Programming
 // unsigned int CalculateNumberofOnes(unsigned int UINTVar);
@@ -493,6 +494,95 @@ BOOL MchpUsbSpiTransfer(HANDLE DevID,INT Direction,UINT8* Buffer, UINT16 DataLen
 		DEBUGPRINT("SPI Transfer success\n");
 		return TRUE;
 	}
+}
+
+uint8_t ForceBootFromRom(HANDLE handle)
+{
+    uint8_t bRetVal = FALSE;
+    uint8_t abyBuffer[4] = {'D','S','P','I'};
+
+    //Writing the signature to disable SPI ROM
+    // bRetVal = xdata_write(handle, 0xBFD227EC, abyBuffer, sizeof(abyBuffer));
+    bRetVal = libusb_control_transfer ((libusb_device_handle*)gasHubInfo[handle].handle,
+		0x40,
+		0x03,
+		0x27EC,
+		0xBFD2,
+		abyBuffer,
+		4,
+		CTRL_TIMEOUT
+	);
+
+    if(FALSE == bRetVal)
+    {
+        printf("Disable SPI signature write failed\n");
+        return bRetVal;
+    }
+
+    // //Enable the SPI interface.
+    // if(FALSE == MchpUsbSpiSetConfig (handle,1))
+    // {
+    //     printf ("\nError: SPI Pass thru enter failed:\n");
+    //     exit (1);
+    // }
+
+    // abyBuffer[0] = 0x66;
+    // if(FALSE == MchpUsbSpiTransfer(handle,0,&abyBuffer[0],1,1)) //write
+    // {
+    //     printf("SPI Transfer write failed \n");
+    //     exit (1);
+    // }
+    //
+    // abyBuffer[0] = 0x99;
+    // if(FALSE == MchpUsbSpiTransfer(handle,0,&abyBuffer[0],1,1)) //write
+    // {
+    //     printf("SPI Transfer write failed \n");
+    //     exit (1);
+    // }
+    //
+    // //Disable the SPI interface.
+    // if(FALSE == MchpUsbSpiSetConfig (handle,0))
+    // {
+    //     printf ("Error: SPI Pass thru enter failed:\n");
+    //     exit (1);
+    // }
+
+    //Issuing a Soft RESET
+    abyBuffer[0] = CMD_OTP_RESET;
+    // xdata_write(handle, 0xBFD1DA1C, abyBuffer, 1);
+    bRetVal = libusb_control_transfer ((libusb_device_handle*)gasHubInfo[handle].handle,
+		0x40,
+		0x03,
+		0xDA1C,
+		0xBFD1,
+		abyBuffer,
+		1,
+		CTRL_TIMEOUT
+	);
+
+    // usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue)
+    // abyBuffer[0] = 0x01;
+    // abyBuffer[1] = 0x03;
+    // bRetVal = usb_send_vsm_command((libusb_device_handle*)gasHubInfo[handle].handle, abyBuffer);
+    //
+    if(FALSE == bRetVal)
+    {
+        printf("Force Boot from ROM failed\n");
+        return bRetVal;
+    }
+
+    bRetVal = libusb_control_transfer ((libusb_device_handle*)gasHubInfo[handle].handle,
+		0x41,
+		0x29,
+		0x0001,
+		0x0000,
+		0,
+		0,
+		CTRL_TIMEOUT
+	);
+
+    sleep(2);
+    return bRetVal;
 }
 
 // BOOL MchpProgramFile( HANDLE DevID, PCHAR InputFileName)
@@ -1221,15 +1311,15 @@ int xdata_read(HANDLE handle, uint16_t wAddress, uint8_t *data, uint8_t num_byte
 	return bRetVal;
 }
 
-int xdata_write(HANDLE handle, uint16_t wAddress, uint8_t *data, uint8_t num_bytes)
+int xdata_write(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_bytes)
 {
 	int bRetVal = FALSE;
 	USB_CTL_PKT UsbCtlPkt;
 
 	UsbCtlPkt.handle 	= (libusb_device_handle*)gasHubInfo[handle].handle;
-	UsbCtlPkt.byRequest 	= 0x03;
-	UsbCtlPkt.wValue 	= wAddress;
-	UsbCtlPkt.wIndex 	= 0;
+	UsbCtlPkt.byRequest = 0x03;
+	UsbCtlPkt.wValue 	= (wAddress & 0xFFFF);
+	UsbCtlPkt.wIndex 	= ((wAddress & 0xFFFF0000) >> 16);
 	UsbCtlPkt.byBuffer 	= data;
 	UsbCtlPkt.wLength 	= num_bytes;
 

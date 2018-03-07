@@ -59,11 +59,29 @@ uint32_t writeBinfile(char const *name, uint8_t *buffer, unsigned long fileLen)
 	return CharWritten;
 }
 
+int Get_Hub_Info(HANDLE handle, uint8_t *data)
+{
+	int bRetVal = FALSE;
+	USB_CTL_PKT UsbCtlPkt;
+
+	UsbCtlPkt.handle 	= (libusb_device_handle*)gasHubInfo[handle].handle;
+	UsbCtlPkt.byRequest = 0x09;
+	UsbCtlPkt.wValue 	= 0;
+	UsbCtlPkt.wIndex 	= 0;
+	UsbCtlPkt.byBuffer 	= data;
+	UsbCtlPkt.wLength 	= 6;
+	bRetVal = usb_HCE_read_data (&UsbCtlPkt);
+	if(bRetVal< 0)
+	{
+		DEBUGPRINT("Execute HubInfo command failed %d\n",bRetVal);
+		return bRetVal;
+	}
+	return bRetVal;
+}
+
 int  usb_HCE_read_data(PUSB_CTL_PKT pUsbCtlPkt)
 {
 	int rc = 0;
-
-
 
 	rc = libusb_control_transfer(	pUsbCtlPkt->handle,
 									LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_INTERFACE,

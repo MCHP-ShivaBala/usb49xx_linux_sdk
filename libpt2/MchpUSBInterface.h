@@ -756,6 +756,10 @@ int MchpGetHubList(PCHAR HubInfo );
 // BOOL MchpProgramFile( HANDLE DevID, PCHAR InputFileName);
 
 
+
+/****
+***/
+uint8_t ForceBootFromRom(HANDLE handle);
 #ifdef __cplusplus
 }
 #endif

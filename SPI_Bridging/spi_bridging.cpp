@@ -36,6 +36,7 @@ int main (int argc, char* argv[])
 	uint8_t byOperation;
     uint32_t byStartAddr = 0;
 	uint8_t hDevice =  INVALID_HANDLE_VALUE;
+    uint8_t bySpiRomBootflag;
 
     uint8_t  pbyBuffer[256 * 1024]; //SB
 	int32_t wDataLength;
@@ -122,7 +123,6 @@ int main (int argc, char* argv[])
 
 	printf("SPI Bridging Demo\n");
 
-
 	//Return handle to the first instance of VendorID and ProductID matched device.
 	hDevice = MchpUsbOpen(vendor_id,product_id,path);
 
@@ -131,8 +131,56 @@ int main (int argc, char* argv[])
 		printf ("\nError: MchpUsbOpenID Failed:\n");
 		exit (1);
 	}
+    printf ("1.MchpUsbOpenID successful... \n");
 
-	printf ("MchpUsbOpenID successful... \n");
+    //find whether device boots from SPI or ROM
+    Get_Hub_Info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
+    if(gasHubInfo[hDevice].sHubInfo.byFeaturesFlag & 0x01)
+    {
+        bySpiRomBootflag = TRUE;
+        printf ("Hub executing from SPI... \n");
+    }
+    else
+    {
+        bySpiRomBootflag = FALSE;
+        printf ("Hub executing from Int ROM... \n");
+    }
+
+    if(bySpiRomBootflag)
+    {
+        //Force Booting from Internal ROM
+        ForceBootFromRom(hDevice);
+
+        if(FALSE == MchpUsbClose(hDevice))
+        {
+            dwError = MchpUsbGetLastErr(hDevice);
+            printf ("\nMchpUsbClose:Error Code,%04x\n",(unsigned int)dwError);
+            exit (1);
+        }
+
+        sleep(2);
+
+        hDevice = MchpUsbOpen(vendor_id,product_id,path);
+
+        if(INVALID_HANDLE_VALUE == hDevice)
+        {
+            printf ("\nError: MchpUsbOpenID Failed:\n");
+            exit (1);
+        }
+        printf ("2.MchpUsbOpenID successful... \n");
+
+        Get_Hub_Info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
+        if(gasHubInfo[hDevice].sHubInfo.byFeaturesFlag & 0x01)
+        {
+            bySpiRomBootflag = TRUE;
+            printf ("Hub executing from SPI... \n");
+        }
+        else
+        {
+            bySpiRomBootflag = FALSE;
+            printf ("Hub executing from Int ROM... \n");
+        }
+    }
 
 	if(byOperation == 0x00) //Read
 	{
@@ -179,6 +227,7 @@ int main (int argc, char* argv[])
             exit (1);
         }
 
+        //Unblock Global Protection
         byBuffer[0] = 0x98;
         if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,1)) //write
         {
