@@ -1,6 +1,23 @@
 /*
 **********************************************************************************
-ADD LICENSE
+
+©  [2018] Microchip Technology Inc. and its subsidiaries.
+Subject to your compliance with these terms, you may use Microchip software and
+any derivatives exclusively with Microchip products. It is your responsibility
+to comply with third party license terms applicable to your use of third party
+software (including open source software) that may accompany Microchip software.
+
+THIS SOFTWARE IS SUPPLIED BY MICROCHIP "AS IS".  NO WARRANTIES, WHETHER EXPRESS,
+IMPLIED OR STATUTORY, APPLY TO THIS SOFTWARE, INCLUDING ANY IMPLIED WARRANTIES
+OF NON-INFRINGEMENT, MERCHANTABILITY, AND FITNESS FOR A PARTICULAR PURPOSE. IN
+NO EVENT WILL MICROCHIP BE LIABLE FOR ANY INDIRECT, SPECIAL, PUNITIVE,
+INCIDENTAL OR CONSEQUENTIAL LOSS, DAMAGE, COST OR EXPENSE OF ANY KIND
+WHATSOEVER RELATED TO THE SOFTWARE, HOWEVER CAUSED, EVEN IF MICROCHIP HAS BEEN
+ADVISED OF THE POSSIBILITY OR THE DAMAGES ARE FORESEEABLE.  TO THE FULLEST
+EXTENT ALLOWED BY LAW, MICROCHIP'S TOTAL LIABILITY ON ALL CLAIMS IN ANY WAY
+RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF FEES, IF ANY, THAT YOU
+HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
+
 **********************************************************************************
 *  $Revision:
 *  Description: This version supports SPI,I2C,UART Bridging and Programming Config file
@@ -43,11 +60,10 @@ ADD LICENSE
 #define CONVERT_ENDIAN_DWORD(w)	((((DWORD32)(w)) << 24) | (((DWORD32)(w) & 0xFF00) << 8) | \
 								 (((DWORD32)(w) & 0xFF0000) >> 8) | (((DWORD32)(w) & 0xFF000000) >> 24))
 
-#define PT2_LIB_VER							"1.23"
+#define PT2_LIB_VER							"1.00"
 
-// #define CTRL_RETRIES 							2
 #define HUB_STATUS_BYTELEN						3 /* max 3 bytes status = hub + 23 ports */
-// #define HUB_DESC_NUM_PORTS_OFFSET					2
+
 #define HUB_SKUs                                6
 
 
@@ -333,7 +349,7 @@ BOOL MchpUsbSpiSetConfig ( HANDLE DevID, INT EnterExit)
 /*New Definition - Pre-req: Hub needs to be open*/
 BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 BytesToRead)
 {
-    uint16_t NumPageWrites = 0;
+    uint16_t NumPageReads = 0;
     // uint8_t RemainderBytes = 0;
     uint8_t byReadBuffer[READ_BLOCK_SIZE+5];
     uint8_t byBuffer[4] = {0,0,0,0};
@@ -345,10 +361,10 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
         exit (1);
     }
 
-    NumPageWrites = BytesToRead / READ_BLOCK_SIZE;
+    NumPageReads = BytesToRead / READ_BLOCK_SIZE;
     // RemainderBytes = BytesToRead % READ_BLOCK_SIZE;
 
-    for(uint16_t i=0; i<NumPageWrites; i++)
+    for(uint16_t i=0; i<NumPageReads; i++)
     {
         byBuffer[0] = HS_READ;
         byBuffer[1] = (StartAddr & 0xFF0000) >> 16; //SB
@@ -388,11 +404,25 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
                 printf("SPI Transfer read failed \n");
                 exit (1);
             }
-            printf("Reading page %d at addr 0x%06x...SR = %02x\n",i,StartAddr,byReadBuffer[0]);
+            DEBUGPRINT("Reading page %d at addr 0x%06x...SR = %02x\n",i,StartAddr,byReadBuffer[0]);
 
         }while(byReadBuffer[0] != 0x00);
 
         StartAddr += READ_BLOCK_SIZE;
+
+        //Printing process completion
+        if(i == 0)
+        {
+            printf("\n\nReading SPI Flash...\n\n0%% ");
+        }
+        if(i%5 == 0)
+        {
+            printf("#");
+        }
+        if(i == NumPageReads-1)
+        {
+            printf(" DONE\n\n");
+        }
     }
 
     //Disable the SPI interface.
@@ -479,7 +509,7 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
             printf("SPI Transfer read failed \n");
             exit (1);
         }
-        printf("Erasing the Block...\n");
+        DEBUGPRINT("Erasing the Block...\n");
 
     }while(byReadBuffer[0] == 0x83);
 
@@ -550,11 +580,26 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
                 printf("SPI Transfer read failed \n");
                 exit (1);
             }
-            printf("Writing page %d at addr 0x%06x...SR = %02x\n",i,StartAddr,byReadBuffer[0]);
+
+            DEBUGPRINT("Writing page %d at addr 0x%06x...SR = %02x\n",i,StartAddr,byReadBuffer[0]);
 
         }while(byReadBuffer[0] == 0x83);
 
         StartAddr += WRITE_BLOCK_SIZE;    //SB
+
+        //Printing process completion
+        if(i == 0)
+        {
+            printf("\n\nProgramming SPI Flash...\n\n0%% ");
+        }
+        if(i%10 == 0)
+        {
+            printf("#");
+        }
+        if(i == NumPageWrites)
+        {
+            printf(" DONE\n\n");
+        }
     }
 
     //WRDI

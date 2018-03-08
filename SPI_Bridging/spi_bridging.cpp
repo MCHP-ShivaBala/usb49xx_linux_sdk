@@ -1,13 +1,31 @@
 /*
 **********************************************************************************
-ADD LICENSE
+
+©  [2018] Microchip Technology Inc. and its subsidiaries.
+Subject to your compliance with these terms, you may use Microchip software and
+any derivatives exclusively with Microchip products. It is your responsibility
+to comply with third party license terms applicable to your use of third party
+software (including open source software) that may accompany Microchip software.
+
+THIS SOFTWARE IS SUPPLIED BY MICROCHIP "AS IS".  NO WARRANTIES, WHETHER EXPRESS,
+IMPLIED OR STATUTORY, APPLY TO THIS SOFTWARE, INCLUDING ANY IMPLIED WARRANTIES
+OF NON-INFRINGEMENT, MERCHANTABILITY, AND FITNESS FOR A PARTICULAR PURPOSE. IN
+NO EVENT WILL MICROCHIP BE LIABLE FOR ANY INDIRECT, SPECIAL, PUNITIVE,
+INCIDENTAL OR CONSEQUENTIAL LOSS, DAMAGE, COST OR EXPENSE OF ANY KIND
+WHATSOEVER RELATED TO THE SOFTWARE, HOWEVER CAUSED, EVEN IF MICROCHIP HAS BEEN
+ADVISED OF THE POSSIBILITY OR THE DAMAGES ARE FORESEEABLE.  TO THE FULLEST
+EXTENT ALLOWED BY LAW, MICROCHIP'S TOTAL LIABILITY ON ALL CLAIMS IN ANY WAY
+RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF FEES, IF ANY, THAT YOU
+HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
+
 **********************************************************************************
 *   spi_bridging.cpp
-*   This file gives the sample code/ test code for using MchpUSB2530 API
+*   This file gives the sample code/ test code for using Mchp USB49xx/USB471x API
 *	Interface.
 **********************************************************************************
 *  $Revision:
 *  Description: Sample code for SPI Bridging
+*  Author: Shiva Balasubramanian <shiva.balasubramanian@microchip.com>
 **********************************************************************************
 * $File:
 */
@@ -36,7 +54,7 @@ int main (int argc, char* argv[])
 	uint8_t byOperation;
     uint32_t byStartAddr = 0;
 	uint8_t hDevice =  INVALID_HANDLE_VALUE;
-    uint8_t bySpiRomBootflag;
+    uint8_t bySpiRomBootflag, byReboot = 0;
 
     uint8_t  pbyBuffer[256 * 1024]; //SB
 	int32_t wDataLength;
@@ -98,14 +116,16 @@ int main (int argc, char* argv[])
 		}
 	}
 
-	// Get the version number of the SDK
-	if (FALSE == MchpUsbGetVersion(sztext))
-	{
-		printf ("\nError:SDK Version cannot be obtained,Press any key to exit....");
-		exit (1);
-	}
+	// // Get the version number of the SDK
+	// if (FALSE == MchpUsbGetVersion(sztext))
+	// {
+	// 	printf ("\nError:SDK Version cannot be obtained,Press any key to exit....");
+	// 	exit (1);
+	// }
 
-	cout << "SDK Version:" <<sztext << endl;
+    printf("\n***** MPLABConnect Linux SDK for USB49xx/USB471x *****\n");
+    printf("SPI Bridging Example\n\n");
+
 	memset(sztext,0,2048);
 
 	hub_count = MchpGetHubList(sztext);
@@ -116,8 +136,6 @@ int main (int argc, char* argv[])
 
 	}
 
-	printf("SPI Bridging Demo\n");
-
 	//Return handle to the first instance of VendorID and ProductID matched device.
 	hDevice = MchpUsbOpen(vendor_id,product_id,path);
 
@@ -126,53 +144,51 @@ int main (int argc, char* argv[])
 		printf ("\nError: MchpUsbOpenID Failed:\n");
 		exit (1);
 	}
-    printf ("1.MchpUsbOpenID successful... \n");
+    printf ("MchpUsbOpenID successful... \n");
 
-    //find whether device boots from SPI or ROM
-    get_hub_info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
-    if(gasHubInfo[hDevice].sHubInfo.byFeaturesFlag & 0x01)
+    do
     {
-        bySpiRomBootflag = TRUE;
-        printf ("Hub executing from SPI... \n");
-    }
-    else
-    {
-        bySpiRomBootflag = FALSE;
-        printf ("Hub executing from Int ROM... \n");
-    }
-
-    if(bySpiRomBootflag)
-    {
-        //Force Booting from Internal ROM
-        ForceBootFromRom(hDevice);
-
-        if(FALSE == MchpUsbClose(hDevice))
-        {
-            dwError = MchpUsbGetLastErr(hDevice);
-            printf ("\nMchpUsbClose:Error Code,%04x\n",(unsigned int)dwError);
-            exit (1);
-        }
-
-        hDevice = MchpUsbOpen(vendor_id,product_id,path);
-
-        if(INVALID_HANDLE_VALUE == hDevice)
-        {
-            printf ("\nError: MchpUsbOpenID Failed:\n");
-            exit (1);
-        }
-        printf ("2.MchpUsbOpenID successful... \n");
-
+        //find whether device boots from SPI ROM or Int ROM
         get_hub_info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
+
+        printf("Hub Silicon Revision: %02x\n", gasHubInfo[hDevice].sHubInfo.byDeviceRevision);
+        printf("Hub Firmware Revision: %02x\n", gasHubInfo[hDevice].sHubInfo.wInternalFWRevision);
+
         if(gasHubInfo[hDevice].sHubInfo.byFeaturesFlag & 0x01)
         {
             bySpiRomBootflag = TRUE;
-            printf ("Hub executing from SPI... \n");
+            printf ("Hub executing from SPI ROM...Forcing Hub to boot from Int ROM... \n");
+
+            //Force Booting from Internal ROM
+            ForceBootFromRom(hDevice);
+
+            //Releasing the existing device handle
+            if(FALSE == MchpUsbClose(hDevice))
+            {
+                dwError = MchpUsbGetLastErr(hDevice);
+                printf ("\nMchpUsbClose:Error Code,%04x\n",(unsigned int)dwError);
+                exit (1);
+            }
+
+            //Re-opening the hub to get a new device handle
+            hDevice = MchpUsbOpen(vendor_id,product_id,path);
+            if(INVALID_HANDLE_VALUE == hDevice)
+            {
+                printf ("\nError: MchpUsbOpenID Failed:\n");
+                exit (1);
+            }
         }
         else
         {
             bySpiRomBootflag = FALSE;
             printf ("Hub executing from Int ROM... \n");
         }
+    } while(bySpiRomBootflag || ((++byReboot)>3));
+
+    if(bySpiRomBootflag)
+    {
+        printf ("Failed to force boot from ROM... \n");
+        exit(1);
     }
 
 	if(byOperation == 0x00) //Read
