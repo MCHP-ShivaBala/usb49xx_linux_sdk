@@ -45,13 +45,8 @@ int main (int argc, char* argv[])
 	uint8_t byBuffer[5] = {0,0,0,0}; //SB
 	uint16_t DataLen, wTotalLen;
 
-    uint8_t byReadBuffer[517];
-    uint8_t byWriteBuffer[260] = {0x02};
-	char path[20] = {0};
+    char path[20] = {0};
 	uint8_t hub_count = 0;
-
-    uint16_t NumPageWrites = 0;
-    uint8_t RemainderBytes = 0;
 
 	if((0 == strcmp(argv[1],"--help")) || (0 == strcmp(argv[1],"/?")))  //Help
 	{
@@ -158,8 +153,6 @@ int main (int argc, char* argv[])
             exit (1);
         }
 
-        sleep(2);
-
         hDevice = MchpUsbOpen(vendor_id,product_id,path);
 
         if(INVALID_HANDLE_VALUE == hDevice)
@@ -198,172 +191,20 @@ int main (int argc, char* argv[])
 	}
 	else if(byOperation == 0x01)//Write
 	{
-	// 	//Read the content of the file.
-	// 	wDataLength = ReadBinfile(sFirmwareFile.c_str(),pbyBuffer);
-	// 	if(wDataLength <=0)
-	// 	{
-	// 		printf("Failed to Read Content of File\n");
-	// 		exit (1);
-	// 	}
-	// 	//Performs write opeartion to SPI Flash memory.
-	// 	if(FALSE == MchpUsbSpiFlashWrite(hDevice,byStartAddr, &pbyBuffer[0],0xfffe))
-	// 	{
-	// 		printf ("\nError: Write Failed:\n");
-	// 		exit (1);
-	// 	}
-
-        //Read the bin file into local Buffer
-        wDataLength = ReadBinfile(sFirmwareFile,pbyBuffer);
-        if(wDataLength <=0)
-        {
-            printf("Failed to Read Content of File\n");
-            exit (1);
-        }
-
-        //Enable the SPI interface.
-        if(FALSE == MchpUsbSpiSetConfig (hDevice,1))
-        {
-            printf ("\nError: SPI Pass thru enter failed:\n");
-            exit (1);
-        }
-
-        //Unblock Global Protection
-        byBuffer[0] = 0x98;
-        if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,1)) //write
-        {
-            printf("SPI Transfer write failed \n");
-            exit (1);
-        }
-
-        //WREN
-        byBuffer[0] = 0x06;
-        //performs write operation to the SPI Interface.	//SB
-        if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,1)) //write
-        {
-            printf("SPI Transfer write failed \n");
-            exit (1);
-        }
-
-        //Chip Erase
-        byBuffer[0] = 0xC7;
-        // if(FALSE == MchpUsbSpiTransfer(hDevice,0,byBuffer,4,4)) //write
-        if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,1)) //write
-        {
-            printf("SPI Transfer write failed \n");
-            exit (1);
-        }
-
-        //Busy wait on the erase operation
-        byBuffer[0] = 0x05;
-        do
-        {
-            //performs write operation to the SPI Interface.	//SB
-            if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,2)) //write
-            {
-                printf("SPI Transfer write failed \n");
-                exit (1);
-            }
-            if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,DataLen,1))
-            {
-                printf("SPI Transfer read failed \n");
-                exit (1);
-            }
-            printf("Erasing the Block...\n");
-
-        }while(byReadBuffer[0] == 0x83);
-
-        NumPageWrites = wDataLength / 256;
-        RemainderBytes = wDataLength % 256;
-
-
-        for (uint16_t i=0; i<=NumPageWrites; i++)
-        {
-
-            byWriteBuffer[1] = (byStartAddr & 0xFF0000) >> 16; //SB
-            byWriteBuffer[2] = (byStartAddr & 0x00FF00) >> 8; //SB
-            byWriteBuffer[3] = byStartAddr & 0x0000FF; //SB
-
-            memcpy((void *)&byWriteBuffer[4], (const void *)&pbyBuffer[i*256], 256);
-
-            //WREN
-            byBuffer[0] = 0x06;
-            //performs write operation to the SPI Interface.	//SB
-            if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,1)) //write
-            {
-                printf("SPI Transfer write failed \n");
-                exit (1);
-            }
-
-            if(i == NumPageWrites)
-            {
-                /*Copying the remaining binary data into write buffer when data lenth < 256 bytes*/
-                memcpy((void *)&byWriteBuffer[4], (const void *)&pbyBuffer[i*256], RemainderBytes);
-
-                /*Writing a remaining bytes in the last page*/
-                if(FALSE == MchpUsbSpiTransfer(hDevice,0,byWriteBuffer,RemainderBytes+4,RemainderBytes+4)) //write
-                {
-                    printf("SPI Transfer write failed \n");
-                    exit (1);
-                }
-
-            }
-            else
-            {
-                /*Copying a page length of binary data into write buffer*/
-                memcpy((void *)&byWriteBuffer[4], (const void *)&pbyBuffer[i*256], 256);
-
-                /*Writing a 256 byte page*/
-                if(FALSE == MchpUsbSpiTransfer(hDevice,0,byWriteBuffer,256+4,256+4)) //write
-                {
-                    printf("SPI Transfer write failed \n");
-                    exit (1);
-                }
-            }
-
-            //Check if the flash is BUSY
-            byBuffer[0] = 0x05;
-            do
-            {
-
-                //performs write operation to the SPI Interface.	//SB
-                if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,2)) //write
-                {
-                    printf("SPI Transfer write failed \n");
-                    exit (1);
-                }
-
-                if(FALSE == MchpUsbSpiTransfer(hDevice,1,(UINT8 *)&byReadBuffer,DataLen,1))
-                {
-                    printf("SPI Transfer read failed \n");
-                    exit (1);
-                }
-                printf("Writing page %d at addr 0x%06x...SR = %02x\n",i,byStartAddr,byReadBuffer[0]);
-
-            }while(byReadBuffer[0] == 0x83);
-
-            byStartAddr += 256;    //SB
-        }
-
-        //WRDI
-        byBuffer[0] = 0x04;
-        //performs write operation to the SPI Interface.	//SB
-        if(FALSE == MchpUsbSpiTransfer(hDevice,0,&byBuffer[0],1,1)) //write
-        {
-            printf("SPI Transfer write failed \n");
-            exit (1);
-        }
-
-        //Disable the SPI interface.
-        if(FALSE == MchpUsbSpiSetConfig (hDevice,0))
-        {
-            printf ("Error: SPI Pass thru enter failed:\n");
-            exit (1);
-        }
-	}
-	else //Transfer
-	{
-
-	}
+		//Read the content of the file.
+		wDataLength = ReadBinfile(sFirmwareFile,pbyBuffer);
+		if(wDataLength <=0)
+		{
+			printf("Failed to Read Content of File\n");
+			exit (1);
+		}
+		//Performs write opeartion to SPI Flash memory.
+		if(FALSE == MchpUsbSpiFlashWrite(hDevice,byStartAddr, pbyBuffer,wDataLength))
+		{
+			printf ("\nError: Write Failed:\n");
+			exit (1);
+		}
+    }
 
 	//close device handle
 	if(FALSE == MchpUsbClose(hDevice))
