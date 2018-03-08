@@ -134,7 +134,7 @@ int main (int argc, char* argv[])
     printf ("1.MchpUsbOpenID successful... \n");
 
     //find whether device boots from SPI or ROM
-    Get_Hub_Info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
+    get_hub_info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
     if(gasHubInfo[hDevice].sHubInfo.byFeaturesFlag & 0x01)
     {
         bySpiRomBootflag = TRUE;
@@ -169,7 +169,7 @@ int main (int argc, char* argv[])
         }
         printf ("2.MchpUsbOpenID successful... \n");
 
-        Get_Hub_Info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
+        get_hub_info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
         if(gasHubInfo[hDevice].sHubInfo.byFeaturesFlag & 0x01)
         {
             bySpiRomBootflag = TRUE;

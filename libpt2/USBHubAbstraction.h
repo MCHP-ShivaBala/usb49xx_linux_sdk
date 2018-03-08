@@ -26,14 +26,6 @@ int32_t ReadBinfile(char const *name, uint8_t *buffer);
  * API is used to write content to binary file*/
 uint32_t writeBinfile(char const *name, uint8_t *buffer, unsigned long fileLen);
 
-/*Get_hub _Info
- * API used to get Hub details such as
- * Firmware type
- * ASIC Type
- * Device revision*
- * Featuresflag - Boots from ROM/SPI*/
-int Get_Hub_Info(HANDLE handle, uint8_t *data);
-
 /*usb_HCE_read_data
  * API does libusb control transfer for Read operation*/
 int  usb_HCE_read_data(PUSB_CTL_PKT pUsbCtlPkt);

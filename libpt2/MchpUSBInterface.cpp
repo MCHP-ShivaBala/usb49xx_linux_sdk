@@ -28,7 +28,9 @@ ADD LICENSE
 #define MICROCHIP_HUB_VID						0x424
 
 #define VID_MICROCHIP							0x0424
-// #define PID_HCE_DEVICE							0x4940
+// #define PID_HCE_DEVICE						0x4940
+
+#define CMD_DEV_RESET                       0x29
 
 #define CMD_SPI_PASSTHRU_ENTER				0x60  //SB
 #define CMD_SPI_PASSTHRU_EXIT				0x62  //SB
@@ -87,6 +89,7 @@ static int compare_hubs(const void *p1, const void *p2);
 static int usb_get_hubs(PHINFO pHubInfoList);
 static int usb_get_hub_list(PCHAR pHubInfoList);
 static int usb_open_HCE_device(uint8_t hub_index);
+int usb_reset_device(HANDLE handle);
 int  usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue) ;
 // bool UsbSetBitXdata(int hub_index,WORD wXDataAddress,BYTE byBitToSet);
 // bool UsbClearBitXdata(int hub_index,WORD wXDataAddress,BYTE byBitToClear);
@@ -423,6 +426,13 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
         exit (1);
     }
 
+    //Resetting the hub
+    if(FALSE == usb_reset_device(DevID))
+    {
+        printf("Failed to Reset the hub\n");
+        exit(1);
+    }
+
     return TRUE;
 }
 
@@ -501,89 +511,52 @@ uint8_t ForceBootFromRom(HANDLE handle)
     uint8_t bRetVal = FALSE;
     uint8_t abyBuffer[4] = {'D','S','P','I'};
 
-    //Writing the signature to disable SPI ROM
-    // bRetVal = xdata_write(handle, 0xBFD227EC, abyBuffer, sizeof(abyBuffer));
-    bRetVal = libusb_control_transfer ((libusb_device_handle*)gasHubInfo[handle].handle,
-		0x40,
-		0x03,
-		0x27EC,
-		0xBFD2,
-		abyBuffer,
-		4,
-		CTRL_TIMEOUT
-	);
-
+    /*
+        For Silicon Rev B1: Write disable SPI signature 'D''S''P''I" to location
+        0xBFD2_27EC
+    */
+    //Writing the signature to disable SPI ROM - Silicon Rev B1
+    bRetVal = xdata_write(handle, 0xBFD227EC, abyBuffer, sizeof(abyBuffer));
+    // bRetVal = libusb_control_transfer ((libusb_device_handle*)gasHubInfo[handle].handle,
+	// 	0x40,
+	// 	0x03,
+	// 	0x27EC,
+	// 	0xBFD2,
+	// 	abyBuffer,
+	// 	4,
+	// 	CTRL_TIMEOUT
+	// );
     if(FALSE == bRetVal)
     {
         printf("Disable SPI signature write failed\n");
         return bRetVal;
     }
 
-    // //Enable the SPI interface.
-    // if(FALSE == MchpUsbSpiSetConfig (handle,1))
-    // {
-    //     printf ("\nError: SPI Pass thru enter failed:\n");
-    //     exit (1);
-    // }
-
-    // abyBuffer[0] = 0x66;
-    // if(FALSE == MchpUsbSpiTransfer(handle,0,&abyBuffer[0],1,1)) //write
-    // {
-    //     printf("SPI Transfer write failed \n");
-    //     exit (1);
-    // }
-    //
-    // abyBuffer[0] = 0x99;
-    // if(FALSE == MchpUsbSpiTransfer(handle,0,&abyBuffer[0],1,1)) //write
-    // {
-    //     printf("SPI Transfer write failed \n");
-    //     exit (1);
-    // }
-    //
-    // //Disable the SPI interface.
-    // if(FALSE == MchpUsbSpiSetConfig (handle,0))
-    // {
-    //     printf ("Error: SPI Pass thru enter failed:\n");
-    //     exit (1);
-    // }
-
     //Issuing a Soft RESET
     abyBuffer[0] = CMD_OTP_RESET;
-    // xdata_write(handle, 0xBFD1DA1C, abyBuffer, 1);
-    bRetVal = libusb_control_transfer ((libusb_device_handle*)gasHubInfo[handle].handle,
-		0x40,
-		0x03,
-		0xDA1C,
-		0xBFD1,
-		abyBuffer,
-		1,
-		CTRL_TIMEOUT
-	);
+    xdata_write(handle, 0xBFD1DA1C, abyBuffer, 1);
 
-    // usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue)
-    // abyBuffer[0] = 0x01;
-    // abyBuffer[1] = 0x03;
-    // bRetVal = usb_send_vsm_command((libusb_device_handle*)gasHubInfo[handle].handle, abyBuffer);
-    //
     if(FALSE == bRetVal)
     {
         printf("Force Boot from ROM failed\n");
         return bRetVal;
     }
 
-    bRetVal = libusb_control_transfer ((libusb_device_handle*)gasHubInfo[handle].handle,
-		0x41,
-		0x29,
-		0x0001,
-		0x0000,
-		0,
-		0,
-		CTRL_TIMEOUT
-	);
+    /*Resetting the hub*/
+    bRetVal = usb_reset_device(handle);
+    if(FALSE == bRetVal)
+    {
+        printf("Failed to Reset the hub\n");
+        return bRetVal;
+    }
 
+    //To allow time for the hub to boot up before performing another operation
     sleep(2);
+
     return bRetVal;
 }
+
+
 
 // BOOL MchpProgramFile( HANDLE DevID, PCHAR InputFileName)
 // {
@@ -1235,6 +1208,47 @@ int usb_enable_HCE_device(uint8_t hub_index)
 
 	libusb_free_device_list(devices, 1);
 	return -1;
+}
+
+int usb_reset_device(HANDLE handle)
+{
+    int bRetVal = FALSE;
+    USB_CTL_PKT UsbCtlPkt;
+
+    UsbCtlPkt.handle 	= (libusb_device_handle*)gasHubInfo[handle].handle;
+    UsbCtlPkt.byRequest = CMD_DEV_RESET;
+    UsbCtlPkt.wValue 	= 0x0001;
+    UsbCtlPkt.wIndex 	= 0;
+    UsbCtlPkt.byBuffer 	= 0;
+    UsbCtlPkt.wLength 	= 0;
+
+    bRetVal = usb_HCE_write_data (&UsbCtlPkt);
+	if(bRetVal< 0)
+	{
+		DEBUGPRINT("Device Reset failed %d\n",bRetVal);
+		return FALSE;
+	}
+    return TRUE;
+}
+
+int get_hub_info(HANDLE handle, uint8_t *data)
+{
+	int bRetVal = FALSE;
+	USB_CTL_PKT UsbCtlPkt;
+
+	UsbCtlPkt.handle 	= (libusb_device_handle*)gasHubInfo[handle].handle;
+	UsbCtlPkt.byRequest = 0x09;
+	UsbCtlPkt.wValue 	= 0;
+	UsbCtlPkt.wIndex 	= 0;
+	UsbCtlPkt.byBuffer 	= data;
+	UsbCtlPkt.wLength 	= 6;
+	bRetVal = usb_HCE_read_data (&UsbCtlPkt);
+	if(bRetVal< 0)
+	{
+		DEBUGPRINT("Execute HubInfo command failed %d\n",bRetVal);
+		return bRetVal;
+	}
+	return bRetVal;
 }
 
 int  usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue)

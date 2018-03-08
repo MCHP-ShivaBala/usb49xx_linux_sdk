@@ -760,6 +760,16 @@ int MchpGetHubList(PCHAR HubInfo );
 /****
 ***/
 uint8_t ForceBootFromRom(HANDLE handle);
+
+
+/*get_hub_info
+ * API used to get Hub details such as
+ * Firmware type
+ * ASIC Type
+ * Device revision*
+ * Featuresflag - Boots from ROM/SPI*/
+int get_hub_info(HANDLE handle, uint8_t *data);
+
 #ifdef __cplusplus
 }
 #endif
