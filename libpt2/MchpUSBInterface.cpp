@@ -20,7 +20,7 @@ HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
 
 **********************************************************************************
 *  $Revision:
-*  Description: This version supports SPI,I2C,UART Bridging and Programming Config file
+*  Description: This version supports SPI Bridging and SPI Flash Programming
 **********************************************************************************
 * $File:  MchpUSBINterface.cpp
 */
@@ -33,7 +33,7 @@ HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
 #include <errno.h>
 #include <math.h>
 
-//PT2 SDK Header file.
+//MPLABConnect SDK Header file.
 #include "typedef.h"
 #include "MchpUSBInterface.h"
 #include "USBHubAbstraction.h"
@@ -41,16 +41,15 @@ HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
 //DLL Exports
 #define FALSE								0
 #define TRUE								1
-#define min(a,b)							(((a) < (b)) ? (a) : (b))
-#define MICROCHIP_HUB_VID						0x424
-
-#define VID_MICROCHIP							0x0424
-// #define PID_HCE_DEVICE						0x4940
+#define MICROCHIP_HUB_VID					0x424
+#define VID_MICROCHIP						0x0424
 
 #define CMD_DEV_RESET                       0x29
+#define BOOT_FROM_ROM_ON_RESET              0x08
 
-#define CMD_SPI_PASSTHRU_ENTER				0x60  //SB
-#define CMD_SPI_PASSTHRU_EXIT				0x62  //SB
+#define CMD_SPI_PASSTHRU_ENTER				0x60
+#define CMD_SPI_PASSTHRU_EXIT				0x62
+#define CMD_SPI_PASSTHRU_WRITE              0x61
 
 //OTP
 #define OTP_DATA_START_ADDRESS						0x0002
@@ -71,33 +70,18 @@ HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
 		printf(__VA_ARGS__); \
 		fprintf(x,  __VA_ARGS__); \
 
-//Microchip SPI fLASH Specific Macros
+//Microchip SPI Flash Specific Macros
 #define WRITE_BLOCK_SIZE                    256
 #define READ_BLOCK_SIZE                     512
 #define READ_JEDEC_ID					    0x9F
-#define	WREN							    0x06
-#define WRDIS                               0X04
-#define	RDSR								0x05
-#define ULBPR								0x98
+#define	WREN							    0x06 //Write latch enable
+#define WRDIS                               0X04 //Write latch disable
+#define	RDSR								0x05 //Read Status Reg
+#define ULBPR								0x98 //Unblock Global Protection
 #define CHIP_ERASE							0xC7
 #define PAGE_PROG							0x02
 #define HS_READ                             0x0B
-
-//OTP
-// typedef struct tagOtpCfgChecksumA
-// {
-// 	uint8_t	abyXORChecksum;
-// 	uint16_t	wCfgStartOffset;
-// 	uint16_t	wCfgLength;
-//
-// }OTP_CFG_CHECKSUM;
-//
-// typedef struct tagOtpCfgChecksumA1
-// {
-// 	uint8_t	abySignature [3];
-// 	OTP_CFG_CHECKSUM otpCfgChecksum;
-//
-// }OTP_CFG_CHECKSUM_A1, *POTP_CFG_CHECKSUM_A1;
+#define RSTQIO                              0xFF
 
 /*-----------------------Helper functions --------------------------*/
 int usb_enable_HCE_device(uint8_t hub_index);
@@ -111,11 +95,8 @@ int  usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue
 // bool UsbClearBitXdata(int hub_index,WORD wXDataAddress,BYTE byBitToClear);
 int Read_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_bytes);
 int Write_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_bytes);
-int xdata_read(HANDLE handle, uint16_t wAddress, uint8_t *data, uint8_t num_bytes);
+int xdata_read(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_bytes);
 int xdata_write(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_bytes);
-
-// //OTP Programming
-// unsigned int CalculateNumberofOnes(unsigned int UINTVar);
 
  // Global variable for tracking the list of hubs
 HINFO gasHubInfo [MAX_HUBS];
@@ -125,17 +106,6 @@ libusb_context *ctx = NULL;
 uint16_t PID_HCE_DEVICE[HUB_SKUs] = {0x4940, 0x494A, 0x494B, 0x494C, 0x494E, 0x494F};
 
 /*-----------------------API functions --------------------------*/
-BOOL  MchpUsbGetVersion ( PCHAR pchVersionNo )
-{
-	BOOL bRet = TRUE;
-
-	//Send command to lib to get library version
-	sprintf(pchVersionNo,"%s",PT2_LIB_VER);
-
-	return bRet;
-
-}
-
 // Get last error for the specific hub instance.
 UINT32 MchpUsbGetLastErr (HANDLE DevID)
 {
@@ -149,63 +119,6 @@ int MchpGetHubList(PCHAR pchHubcount )
 	hub_count  = usb_get_hub_list(pchHubcount);
 	return hub_count;
 }
-
-//Return handle to the first instance of VendorID &amp; ProductID matched device.
-// HANDLE  MchpUsbOpenID ( UINT16 wVID, UINT16 wPID)
-// {
-// 	int error = 0, hub_cnt=0, hub_index=0;
-// 	int restart_count=5;
-// 	bool bhub_found = false;
-//
-// 	//Get the list of the hubs from the device.
-// 	hub_cnt = usb_get_hubs(&gasHubInfo[0]);
-// 	do
-// 	{
-// 		if((gasHubInfo[hub_index].wVID == wVID) && (gasHubInfo[hub_index].wPID == wPID))
-// 		{
-// 			bhub_found = true;
-// 			break;
-// 		}
-//
-// 	}
-// 	while(hub_index++ < hub_cnt);
-//
-// 	if(false == bhub_found)
-// 	{
-// 		DEBUGPRINT("MCHP_Error_Device_Not_Found \n");
-// 		return INVALID_HANDLE_VALUE;
-// 	}
-//
-// 	error = usb_open_HCE_device(hub_index);
-// 	if(error < 0)
-// 	{
-//
-// 		//enable 5th Endpoit
-// 		error = usb_enable_HCE_device(hub_index);
-//
-// 		if(error < 0)
-// 		{
-// 			DEBUGPRINT("MCHP_Error_Invalid_Device_Handle: Failed to Enable the device \n");
-// 			return INVALID_HANDLE_VALUE;
-// 		}
-// 		do
-// 		{
-// 			sleep(2);
-// 			error = usb_open_HCE_device(hub_index);
-// 			if(error == 0)
-// 			{
-// 				return hub_index;
-// 			}
-//
-// 		}while(restart_count--);
-//
-// 		DEBUGPRINT("MCHP_Error_Invalid_Device_Handle: Failed to open the device error:%d\n",error);
-// 		return INVALID_HANDLE_VALUE;
-// 	}
-//
-//
-// 	return hub_index;
-// }
 
 //Return handle to the first instance of VendorID &amp; ProductID &amp; port path matched device.
 HANDLE  MchpUsbOpen ( UINT16 wVID, UINT16 wPID,char* cDevicePath)
@@ -272,7 +185,7 @@ HANDLE  MchpUsbOpen ( UINT16 wVID, UINT16 wPID,char* cDevicePath)
 
     	if(error < 0)
     	{
-        //enable 5th Endpoit
+        //enable 5th Endpoint
 		error = usb_enable_HCE_device(hub_index);
 
  	       if(error < 0)
@@ -318,6 +231,7 @@ BOOL MchpUsbClose(HANDLE DevID)
 	return true;
 }
 
+//Enable/Disable the SPI Passthrough Interface
 BOOL MchpUsbSpiSetConfig ( HANDLE DevID, INT EnterExit)
 {
 	int rc = FALSE;
@@ -346,13 +260,21 @@ BOOL MchpUsbSpiSetConfig ( HANDLE DevID, INT EnterExit)
 	return bRet;
 }
 
-/*New Definition - Pre-req: Hub needs to be open*/
+/*Pre-req: Hub needs to be open*/
 BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 BytesToRead)
 {
     uint16_t NumPageReads = 0;
     // uint8_t RemainderBytes = 0;
     uint8_t byReadBuffer[READ_BLOCK_SIZE+5];
-    uint8_t byBuffer[4] = {0,0,0,0};
+    uint8_t byBuffer[5] = {0,0,0,0,0};
+
+    // //Reset Quad IO
+    // byBuffer[0] = RSTQIO;
+    // if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,1)) //write
+    // {
+    //     printf("SPI Transfer write failed \n");
+    //     exit (1);
+    // }
 
     //Enable the SPI interface.
     if(FALSE == MchpUsbSpiSetConfig (DevID,1))
@@ -366,13 +288,14 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
 
     for(uint16_t i=0; i<NumPageReads; i++)
     {
+        //Writing the HS_READ command
         byBuffer[0] = HS_READ;
-        byBuffer[1] = (StartAddr & 0xFF0000) >> 16; //SB
-        byBuffer[2] = (StartAddr & 0x00FF00) >> 8; //SB
-        byBuffer[3] = StartAddr & 0x0000FF; //SB
+        byBuffer[1] = (StartAddr & 0xFF0000) >> 16;
+        byBuffer[2] = (StartAddr & 0x00FF00) >> 8;
+        byBuffer[3] = StartAddr & 0x0000FF;
+        byBuffer[4] = 0;
 
-        //performs write operation to the SPI Interface.	//SB
-        if(FALSE == MchpUsbSpiTransfer(DevID,0,byBuffer,4,READ_BLOCK_SIZE+5)) //write
+        if(FALSE == MchpUsbSpiTransfer(DevID,0,byBuffer,5,READ_BLOCK_SIZE+5)) //write
         {
             printf("SPI Transfer write failed \n");
             exit (1);
@@ -386,7 +309,7 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
         }
 
         /*Copying the READ_BLOCK_SIZE of data read into local buffer for writing to binary file*/
-        memcpy((void *)&InputData[i*512], (const void *)&byReadBuffer[1], 512);
+        memcpy((void *)&InputData[i*READ_BLOCK_SIZE], (const void *)&byReadBuffer[0], READ_BLOCK_SIZE);
 
         //Check if the flash is BUSY
         byBuffer[0] = RDSR;
@@ -431,14 +354,6 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
         printf ("Error: SPI Pass thru enter failed:\n");
         exit (1);
     }
-
-    //Resetting the hub
-    if(FALSE == usb_reset_device(DevID))
-    {
-        printf("Failed to Reset the hub\n");
-        exit(1);
-    }
-
     return TRUE;
 }
 
@@ -448,7 +363,7 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
     uint16_t NumPageWrites = 0;
     uint8_t RemainderBytes = 0;
     uint8_t byWriteBuffer[WRITE_BLOCK_SIZE+4] = {PAGE_PROG};
-    uint8_t byReadBuffer[2];
+    uint8_t byReadBuffer[4];
     uint8_t byBuffer[4] = {0,0,0,0};
 
 	if(nullptr == OutputData)
@@ -462,10 +377,28 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
 		DEBUGPRINT("MchpUsbSpiFlashWrite Failed: BytesToWrite (%d) and StartAddr(0x%x) is larger than SPI memory size\n",BytesToWrite,StartAddr);
 		return bRet;
 	}
+
+    //Reset Quad IO
+    byBuffer[0] = RSTQIO;
+    if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,1)) //write
+    {
+        printf("SPI Transfer write failed \n");
+        exit (1);
+    }
+
     //Enable the SPI interface.
     if(FALSE == MchpUsbSpiSetConfig (DevID,1))
     {
         printf ("\nError: SPI Pass thru enter failed:\n");
+        exit (1);
+    }
+
+    //WREN
+    byBuffer[0] = WREN;
+    //performs write operation to the SPI Interface.
+    if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,1)) //write
+    {
+        printf("SPI Transfer write failed \n");
         exit (1);
     }
 
@@ -493,25 +426,26 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
         printf("SPI Transfer write failed \n");
         exit (1);
     }
+    printf("\nErasing the SPI Flash...");
 
     //Busy wait on the erase operation
     byBuffer[0] = RDSR;
+    byBuffer[1] = 0;
     do
     {
-        //performs write operation to the SPI Interface.	//SB
-        if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,2)) //write
+        //performs write operation to the SPI Interface.
+        if(FALSE == MchpUsbSpiTransfer(DevID,0,byBuffer,2,3)) //write
         {
             printf("SPI Transfer write failed \n");
             exit (1);
         }
-        if(FALSE == MchpUsbSpiTransfer(DevID,1,(UINT8 *)&byReadBuffer,0,1))
+        if(FALSE == MchpUsbSpiTransfer(DevID,1,(UINT8 *)&byReadBuffer,0,2))
         {
             printf("SPI Transfer read failed \n");
             exit (1);
         }
-        DEBUGPRINT("Erasing the Block...\n");
-
-    }while(byReadBuffer[0] == 0x83);
+    }while((byReadBuffer[0] & 0x80)>>7);
+    printf("DONE\n");
 
     NumPageWrites = BytesToWrite / WRITE_BLOCK_SIZE;
     RemainderBytes = BytesToWrite % WRITE_BLOCK_SIZE;
@@ -565,17 +499,18 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
 
         //Check if the flash is BUSY
         byBuffer[0] = RDSR;
+        byBuffer[1] = 0;
         do
         {
 
-            //performs write operation to the SPI Interface.	//SB
-            if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,2)) //write
+            //performs write operation to the SPI Interface.
+            if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],2,3)) //write
             {
                 printf("SPI Transfer write failed \n");
                 exit (1);
             }
 
-            if(FALSE == MchpUsbSpiTransfer(DevID,1,(UINT8 *)&byReadBuffer,0,1))
+            if(FALSE == MchpUsbSpiTransfer(DevID,1,(UINT8 *)&byReadBuffer,0,2))
             {
                 printf("SPI Transfer read failed \n");
                 exit (1);
@@ -583,14 +518,14 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
 
             DEBUGPRINT("Writing page %d at addr 0x%06x...SR = %02x\n",i,StartAddr,byReadBuffer[0]);
 
-        }while(byReadBuffer[0] == 0x83);
+        }while((byReadBuffer[0] & 0x80)>>7);
 
         StartAddr += WRITE_BLOCK_SIZE;    //SB
 
         //Printing process completion
         if(i == 0)
         {
-            printf("\n\nProgramming SPI Flash...\n\n0%% ");
+            printf("Programming SPI Flash...\n\n0%% ");
         }
         if(i%10 == 0)
         {
@@ -627,6 +562,7 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
 
     return TRUE;
 }
+
 BOOL MchpUsbSpiTransfer(HANDLE DevID,INT Direction,UINT8* Buffer, UINT16 DataLength,UINT32 TotalLength)
 {
 	int bRetVal = FALSE;
@@ -658,6 +594,28 @@ BOOL MchpUsbSpiTransfer(HANDLE DevID,INT Direction,UINT8* Buffer, UINT16 DataLen
 	}
 }
 
+//Reads the JEDEC ID of the SPI Flash
+BOOL GetJEDECID(HANDLE DevID, uint8_t *byBuffer)
+{
+    byBuffer[0] = READ_JEDEC_ID;
+    if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,4)) //write
+    {
+        DEBUGPRINT("SPI Transfer write failed \n");
+        return FALSE;
+    }
+
+    if(FALSE == MchpUsbSpiTransfer(DevID,1,(UINT8 *)&byBuffer[0],0,4))
+    {
+        DEBUGPRINT("SPI Transfer write failed \n");
+        return FALSE;
+    }
+
+    DEBUGPRINT("SPI Flash JEDEC ID read as %02x %02x %02x %02x\n",byBuffer[0],
+        byBuffer[1], byBuffer[2], byBuffer[3]);
+
+    return TRUE;
+}
+
 uint8_t ForceBootFromRom(HANDLE handle)
 {
     uint8_t bRetVal = FALSE;
@@ -669,15 +627,6 @@ uint8_t ForceBootFromRom(HANDLE handle)
     */
     //Writing the signature to disable SPI ROM - Silicon Rev B1
     bRetVal = xdata_write(handle, 0xBFD227EC, abyBuffer, sizeof(abyBuffer));
-    // bRetVal = libusb_control_transfer ((libusb_device_handle*)gasHubInfo[handle].handle,
-	// 	0x40,
-	// 	0x03,
-	// 	0x27EC,
-	// 	0xBFD2,
-	// 	abyBuffer,
-	// 	4,
-	// 	CTRL_TIMEOUT
-	// );
     if(FALSE == bRetVal)
     {
         printf("Disable SPI signature write failed\n");
@@ -685,7 +634,7 @@ uint8_t ForceBootFromRom(HANDLE handle)
     }
 
     //Issuing a Soft RESET
-    abyBuffer[0] = CMD_OTP_RESET;
+    abyBuffer[0] = BOOT_FROM_ROM_ON_RESET;
     xdata_write(handle, 0xBFD1DA1C, abyBuffer, 1);
 
     if(FALSE == bRetVal)
@@ -703,7 +652,7 @@ uint8_t ForceBootFromRom(HANDLE handle)
     }
 
     //To allow time for the hub to boot up before performing another operation
-    sleep(2);
+    sleep(3);
 
     return bRetVal;
 }
@@ -1461,15 +1410,15 @@ int Write_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_byte
 	return bRetVal;
 }
 
-int xdata_read(HANDLE handle, uint16_t wAddress, uint8_t *data, uint8_t num_bytes)
+int xdata_read(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_bytes)
 {
 	int bRetVal = FALSE;
 	USB_CTL_PKT UsbCtlPkt;
 
 	UsbCtlPkt.handle 	= (libusb_device_handle*)gasHubInfo[handle].handle;
 	UsbCtlPkt.byRequest 	= 0x04;
-	UsbCtlPkt.wValue 	= wAddress;
-	UsbCtlPkt.wIndex 	= 0;
+	UsbCtlPkt.wValue 	= (wAddress & 0xFFFF);
+	UsbCtlPkt.wIndex 	= ((wAddress & 0xFFFF0000) >> 16);
 	UsbCtlPkt.byBuffer 	= data;
 	UsbCtlPkt.wLength 	= num_bytes;
 

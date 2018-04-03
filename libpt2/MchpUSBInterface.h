@@ -64,7 +64,7 @@ extern "C" {
 #define CTRL_TIMEOUT 						(5*1000) /* milliseconds */
 #define MAX_FW_SIZE					        (256 * 1024)    //SB
 
-// #define DEBUG
+#define DEBUG
 #ifdef DEBUG
 #define DEBUGPRINT(...) printf("DEBUGINFO: " __VA_ARGS__)
 #else
