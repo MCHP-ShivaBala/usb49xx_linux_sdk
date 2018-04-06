@@ -256,13 +256,13 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
     uint8_t byReadBuffer[READ_BLOCK_SIZE+5];
     uint8_t byBuffer[5] = {0,0,0,0,0};
 
-    // //Reset Quad IO
-    // byBuffer[0] = RSTQIO;
-    // if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,1)) //write
-    // {
-    //     printf("SPI Transfer write failed \n");
-    //     exit (1);
-    // }
+    //Reset Quad IO
+    byBuffer[0] = RSTQIO;
+    if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,1)) //write
+    {
+        printf("SPI Transfer write failed \n");
+        exit (1);
+    }
 
     //Enable the SPI interface.
     if(FALSE == MchpUsbSpiSetConfig (DevID,1))
@@ -380,6 +380,28 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
     {
         printf ("\nError: SPI Pass thru enter failed:\n");
         exit (1);
+    }
+
+    //Reading the JEDEC ID of the flash
+    if(FALSE == GetJEDECID(DevID, byBuffer))
+    {
+        printf ("Failed to read the SPI Flash Manufacturer ID:\n");
+        exit (1);
+    }
+
+    if(byBuffer[0] != MICROCHIP_SST_FLASH)
+    {
+        printf("Warning: Non-Microchip Flash are not supported. Operation might fail or have unexpected results\n");
+        printf("Do you wish to continue (Choose y or n):");
+        if(getchar() == 'n')
+        {
+            printf("Exiting...\n");
+            exit(1);
+        }
+        else
+        {
+            printf("\n");
+        }
     }
 
     //WREN

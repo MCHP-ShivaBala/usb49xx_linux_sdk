@@ -61,7 +61,6 @@ int main (int argc, char* argv[])
     char *sFirmwareFile;
 
 	uint8_t byBuffer[4] = {0,0,0,0};
-    uint8_t byJedecIDBuffer[4] = {0,0,0,0};
 	uint16_t DataLen, wTotalLen;
     uint8_t byDirection;
     enum OpCode {READ = 0, WRITE, TRANSFER};
@@ -191,27 +190,6 @@ int main (int argc, char* argv[])
         printf ("Failed to force boot from ROM... \n");
         exit(1);
     }
-
-    if(FALSE == GetJEDECID(hDevice, byJedecIDBuffer))
-    {
-        printf ("Failed to read the SPI Flash Manufacturer ID:\n");
-        exit (1);
-    }
-
-    // if(byJedecIDBuffer[0] != MICROCHIP_SST_FLASH)
-    // {
-    //     printf("Warning: Non-Microchip Flash are not supported. Operation might fail or have unexpected results\n");
-    //     printf("Do you wish to continue (Choose y or n):");
-    //     if(getchar() == 'n')
-    //     {
-    //         printf("Exiting...\n");
-    //         exit(1);
-    //     }
-    //     else
-    //     {
-    //         printf("\n");
-    //     }
-    // }
 
     switch(byOperation)
     {
