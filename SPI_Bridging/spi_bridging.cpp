@@ -56,7 +56,7 @@ int main (int argc, char* argv[])
 	uint8_t hDevice =  INVALID_HANDLE_VALUE;
     uint8_t bySpiRomBootflag, byReboot = 0;
 
-    uint8_t  pbyBuffer[256 * 1024]; //SB
+    uint8_t  pbyBuffer[MAX_FW_SIZE]; //SB
 	int32_t wDataLength;
     char *sFirmwareFile;
 
@@ -92,7 +92,7 @@ int main (int argc, char* argv[])
 	}
 	else
 	{
-		vendor_id  =  strtol (argv[1], NULL, 0) ;          //Getting vid and Pid from commandline arguments.
+		vendor_id  =  strtol (argv[1], NULL, 0) ;  //Getting vid and Pid from commandline arguments.
 		product_id =  strtol (argv[2], NULL, 0) ;
 		strcpy(path,argv[3]);
 		byOperation=  strtol (argv[4], NULL, 0) ;
@@ -116,7 +116,7 @@ int main (int argc, char* argv[])
 		}
 	}
 
-    printf("\n***** MPLABConnect Linux SDK for USB49xx *****\n");
+    printf("\n***** MPLABConnect Linux SDK for USB49xx/471x *****\n");
     printf("SPI Programming Example\n\n");
     #ifdef DEBUG
           DEBUGPRINT("DEBUG Mode: Enabled\n\n");
@@ -192,36 +192,141 @@ int main (int argc, char* argv[])
         exit(1);
     }
 
-	if(byOperation == 0x00) //Read
-	{
-        //Performs read operation from SPI Flash.
-		if(FALSE == MchpUsbSpiFlashRead(hDevice,byStartAddr,pbyBuffer,MAX_FW_SIZE))
-		{
-			printf ("\nError: Read Failed:\n");
-			exit (1);
-		}
-
-        if(writeBinfile(sFirmwareFile, pbyBuffer, MAX_FW_SIZE) < 0)
-        {
-            printf("Error: Failed to create binary file\n");
-        }
-	}
-	else if(byOperation == 0x01)//Write
-	{
-		//Read the content of the file.
-		wDataLength = ReadBinfile(sFirmwareFile,pbyBuffer);
-		if(wDataLength <=0)
-		{
-			printf("Failed to Read Content of File\n");
-			exit (1);
-		}
-		//Performs write opeartion to SPI Flash memory.
-		if(FALSE == MchpUsbSpiFlashWrite(hDevice,byStartAddr, pbyBuffer,wDataLength))
-		{
-			printf ("\nError: Write Failed:\n");
-			exit (1);
-		}
+    if(FALSE == GetJEDECID(hDevice, byJedecIDBuffer))
+    {
+        printf ("Failed to read the SPI Flash Manufacturer ID:\n");
+        exit (1);
     }
+
+    // if(byJedecIDBuffer[0] != MICROCHIP_SST_FLASH)
+    // {
+    //     printf("Warning: Non-Microchip Flash are not supported. Operation might fail or have unexpected results\n");
+    //     printf("Do you wish to continue (Choose y or n):");
+    //     if(getchar() == 'n')
+    //     {
+    //         printf("Exiting...\n");
+    //         exit(1);
+    //     }
+    //     else
+    //     {
+    //         printf("\n");
+    //     }
+    // }
+
+    switch(byOperation)
+    {
+        case READ :
+
+            //Performs read operation from SPI Flash.
+            if(FALSE == MchpUsbSpiFlashRead(hDevice,byStartAddr,pbyBuffer,MAX_FW_SIZE))
+            {
+                printf ("\nError: Flash Read Failed: Booting from Internal ROM...\n");
+                // exit (1);
+                bySpiRomBootflag = FALSE;
+            }
+            else
+            {
+                bySpiRomBootflag = TRUE;
+            }
+
+            if(writeBinfile(sFirmwareFile, pbyBuffer, MAX_FW_SIZE) < 0)
+            {
+                printf("Error: Failed to create binary file\n");
+            }
+            break;
+
+        case WRITE :
+
+            //Read the content of the file.
+            wDataLength = ReadBinfile(sFirmwareFile,pbyBuffer);
+            if(wDataLength <=0)
+            {
+                printf("Failed to Read Content of File\n");
+                exit (1);
+            }
+            //Performs write opeartion to SPI Flash memory.
+            if(FALSE == MchpUsbSpiFlashWrite(hDevice,byStartAddr, pbyBuffer,wDataLength))
+            {
+                printf ("\nError: Flash Write Failed\n");
+                // exit (1);
+                bySpiRomBootflag = FALSE;
+            }
+            else
+            {
+                bySpiRomBootflag = TRUE;
+            }
+            break;
+
+        case TRANSFER :
+
+            if(FALSE == MchpUsbSpiTransfer(hDevice, byDirection, byBuffer, DataLen, wTotalLen))
+            {
+                printf("SPI Transfer write failed \n");
+            }
+            if(byDirection)
+            {
+                printf("\nSPI Transfer Read Data: ");
+                for(uint8_t i=0; i<wTotalLen; i++)
+                {
+                    printf("0x%02x  ", byBuffer[i]);
+                }
+                printf("\n");
+            }
+            bySpiRomBootflag = TRUE;
+            break;
+
+        default :
+
+            printf("ERROR: Invalid Operation\n");
+            printf("Use --help option for further details \n");
+            exit (1);
+
+    }
+
+    //Reset the hub to run from SPI ROM if Flash Read/Write was successful
+    //else force boot from internal ROM
+    if(bySpiRomBootflag)
+    {
+        printf("Booting from SPI ROM...\n\n");
+        //Resetting the hub
+        if(FALSE == usb_reset_device(hDevice))
+        {
+            printf("Failed to Reset the hub\n");
+            exit(1);
+        }
+
+        //To allow time for the hub to boot up before performing another operation
+        sleep(3);
+    }
+    else
+    {
+        printf("Booting from Internal ROM...\n\n");
+        //Force Booting from Internal ROM
+        ForceBootFromRom(hDevice);
+
+        //Releasing the existing device handle
+        if(FALSE == MchpUsbClose(hDevice))
+        {
+            dwError = MchpUsbGetLastErr(hDevice);
+            printf ("\nMchpUsbClose:Error Code,%04x\n",(unsigned int)dwError);
+            exit (1);
+        }
+    }
+
+    //Re-opening the hub to get a new device handle
+    hDevice = MchpUsbOpen(vendor_id,product_id,path);
+    if(INVALID_HANDLE_VALUE == hDevice)
+    {
+        printf ("\nError: MchpUsbOpenID Failed:\n");
+        exit (1);
+    }
+
+    //Checking Firmware version post programming
+    printf("Gathering Hub Information...\n");
+    get_hub_info(hDevice, (uint8_t *)&gasHubInfo[hDevice].sHubInfo);
+
+    printf("Hub Silicon Revision: %02x\n", gasHubInfo[hDevice].sHubInfo.byDeviceRevision);
+    printf("Hub Firmware Revision: %02x\n", gasHubInfo[hDevice].sHubInfo.wInternalFWRevision);
 
 	//close device handle
 	if(FALSE == MchpUsbClose(hDevice))

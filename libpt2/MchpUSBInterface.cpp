@@ -51,16 +51,6 @@ HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
 #define CMD_SPI_PASSTHRU_EXIT				0x62
 #define CMD_SPI_PASSTHRU_WRITE              0x61
 
-//OTP
-#define OTP_DATA_START_ADDRESS						0x0002
-#define BIG_ENDIAN_WORD(w) 						((((w)&0xFF)<<8) | (((w)&0xFF00) >> 8))
-#define CMD_OTP_RESET                       0x08
-
-#define CONVERT_ENDIAN_DWORD(w)	((((DWORD32)(w)) << 24) | (((DWORD32)(w) & 0xFF00) << 8) | \
-								 (((DWORD32)(w) & 0xFF0000) >> 8) | (((DWORD32)(w) & 0xFF000000) >> 24))
-
-#define PT2_LIB_VER							"1.00"
-
 #define HUB_STATUS_BYTELEN						3 /* max 3 bytes status = hub + 23 ports */
 
 #define HUB_SKUs                                6
@@ -89,10 +79,7 @@ static int compare_hubs(const void *p1, const void *p2);
 static int usb_get_hubs(PHINFO pHubInfoList);
 static int usb_get_hub_list(PCHAR pHubInfoList);
 static int usb_open_HCE_device(uint8_t hub_index);
-int usb_reset_device(HANDLE handle);
-int  usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue) ;
-// bool UsbSetBitXdata(int hub_index,WORD wXDataAddress,BYTE byBitToSet);
-// bool UsbClearBitXdata(int hub_index,WORD wXDataAddress,BYTE byBitToClear);
+int usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue) ;
 int Read_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_bytes);
 int Write_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_bytes);
 int xdata_read(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_bytes);
@@ -102,6 +89,7 @@ int xdata_write(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_byt
 HINFO gasHubInfo [MAX_HUBS];
 /* Context Variable used for initializing LibUSB session */
 libusb_context *ctx = NULL;
+
 /*List of possible PIDs for USB491X/USB471X HFCs*/
 uint16_t PID_HCE_DEVICE[HUB_SKUs] = {0x4940, 0x494A, 0x494B, 0x494C, 0x494E, 0x494F};
 
@@ -363,8 +351,9 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
     uint16_t NumPageWrites = 0;
     uint8_t RemainderBytes = 0;
     uint8_t byWriteBuffer[WRITE_BLOCK_SIZE+4] = {PAGE_PROG};
-    uint8_t byReadBuffer[4];
+    uint8_t byReadBuffer[2];
     uint8_t byBuffer[4] = {0,0,0,0};
+    uint8_t byVerifyBuffer[MAX_FW_SIZE];
 
 	if(nullptr == OutputData)
 	{
@@ -553,14 +542,32 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
         exit (1);
     }
 
-    //Resetting the hub
-    if(FALSE == usb_reset_device(DevID))
+    //Reading the SPI Flash to compare it against the programmed binary file for
+    //verification
+    printf("Verifying the flash...\n");
+    //Performs read operation from SPI Flash.
+    if(FALSE == MchpUsbSpiFlashRead(DevID,0,byVerifyBuffer, BytesToWrite))
     {
-        printf("Failed to Reset the hub\n");
-        exit(1);
+        printf ("SPI Flash Verification Read Failed\n");
+        exit (1);
     }
 
-    return TRUE;
+    if(0 == memcmp(byVerifyBuffer, OutputData, BytesToWrite))
+	{
+		printf("Flash Write Verification: Passed\n");
+		return TRUE;
+	}
+	else
+	{
+		printf("Flash Write Verification: Failed\n");
+
+        #ifdef DEBUG
+              DEBUGPRINT("Generating flash_verify_fail.bin for debugging\n");
+		      writeBinfile("flash_verify_fail.bin", byVerifyBuffer, MAX_FW_SIZE);
+        #endif
+
+        return FALSE;
+	}
 }
 
 BOOL MchpUsbSpiTransfer(HANDLE DevID,INT Direction,UINT8* Buffer, UINT16 DataLength,UINT32 TotalLength)
@@ -574,13 +581,13 @@ BOOL MchpUsbSpiTransfer(HANDLE DevID,INT Direction,UINT8* Buffer, UINT16 DataLen
 
 	if(Direction) //Read
 	{
-		bRetVal = libusb_control_transfer((libusb_device_handle*)gasHubInfo[DevID].handle,0xC1,0x04,0x2310,0xBFD2,Buffer,
-								TotalLength,CTRL_TIMEOUT);
+		bRetVal = libusb_control_transfer((libusb_device_handle*)gasHubInfo[DevID].handle,0xC1,
+                    0x04,0x2310,0xBFD2,Buffer,TotalLength,CTRL_TIMEOUT);
 	}
 	else //Write
 	{
-		bRetVal = libusb_control_transfer((libusb_device_handle*)gasHubInfo[DevID].handle,0x41,0x61,TotalLength,0,Buffer,
-					DataLength,CTRL_TIMEOUT);
+		bRetVal = libusb_control_transfer((libusb_device_handle*)gasHubInfo[DevID].handle,0x41,
+                    CMD_SPI_PASSTHRU_WRITE,TotalLength,0,Buffer,DataLength,CTRL_TIMEOUT);
 	}
 	if(bRetVal <0 )
 	{
@@ -657,186 +664,6 @@ uint8_t ForceBootFromRom(HANDLE handle)
     return bRetVal;
 }
 
-
-
-// BOOL MchpProgramFile( HANDLE DevID, PCHAR InputFileName)
-// {
-// 	BOOL bRet = FALSE;
-// 	//Read entire OTP
-// 	uint8_t abyBuffer[2048];
-// 	uint8_t  pbyBuffer[64];
-// 	uint8_t wDataLength;
-// 	uint16_t wConfigBytes;
-// 	uint16_t wNumberOfOnes;
-// 	wDataLength = ReadBinfile(InputFileName,pbyBuffer);
-// 	if(0 == wDataLength)
-// 	{
-// 		DEBUGPRINT("Failed to Read Given Configuration File \n");
-// 		return bRet;
-// 	}
-// 	bRet= Read_OTP(DevID, 0, abyBuffer, 2048);
-// 	if(bRet < 0)
-// 	{
-// 		DEBUGPRINT("Failed to Read OTP Content \n");
-// 		return bRet;
-// 	}
-//
-// 	//find whether device boots from SPI or ROM
-// 	Get_Hub_Info(DevID, (uint8_t *)&gasHubInfo[DevID].sHubInfo);
-//
-// 	// Update Number of configuration updated in OTP
-// 	//Note that by default 0th byte is 0x00 and 1st byte is 0xff present in the OTP.
-// 	//That is why xor is used below command
-// 	if(gasHubInfo[DevID].sHubInfo.byFeaturesFlag & 0x01)
-// 	{
-// 		wConfigBytes = (abyBuffer[0] << 8) | (abyBuffer[1]);
-// 		wNumberOfOnes = CalculateNumberofOnes(wConfigBytes);
-// 		wNumberOfOnes = (16 - wNumberOfOnes);
-// 		wConfigBytes &= ~(1 << wNumberOfOnes);
-//
-// 		//Update The OTP buffer
-// 		abyBuffer[0] = (uint8_t)((wConfigBytes & 0xFF00) >> 8); //MSB
-// 		abyBuffer[1] = (uint8_t)(wConfigBytes & 0x00FF); //LSB
-// 	}
-// 	else
-// 	{
-// 		wConfigBytes = (abyBuffer[0] << 8) |(abyBuffer[1] ^ 0xFF);
-// 		//Calculate number of configuration present in OTP
-// 		wNumberOfOnes = CalculateNumberofOnes(wConfigBytes);
-// 		//Set the BitMask
-// 		wConfigBytes = wConfigBytes | (1 << wNumberOfOnes);
-//
-// 		//Update the OTP buffer for indicating programming count is incremented by one.
-// 		//First two bytes will represent the number of times the OTP is programmed.
-// 		abyBuffer[0] = (uint8_t)((wConfigBytes & 0xFF00) >> 8); //MSB
-// 		abyBuffer[1] = ((uint8_t)(wConfigBytes & 0x00FF) ^ 0xFF ); //LSB
-// 	}
-//
-//
-// 	//This is the logic for finding the OTP configuartion record update and data update.
-// 	//Start from lowest index
-// 	//By deafult, Data starts at 2 if no header found and record header will point end
-// 	//of otp minus the last configuarion data(2048-8).
-// 	uint16_t gwOTPDataOffset = OTP_DATA_START_ADDRESS;
-// 	uint16_t gwOTPHdrOffset = 2048 - sizeof(OTP_CFG_CHECKSUM_A1);
-// 	uint16_t wTmpOTPDataOffset =0, wTmpLenght=0;
-// 	OTP_CFG_CHECKSUM_A1 *pstChecksumA1 = NULL;
-//
-// 	pstChecksumA1 = (OTP_CFG_CHECKSUM_A1 *) &abyBuffer[gwOTPHdrOffset];
-//
-// 	wTmpOTPDataOffset = BIG_ENDIAN_WORD (pstChecksumA1->otpCfgChecksum.wCfgStartOffset);
-// 	wTmpLenght = BIG_ENDIAN_WORD (pstChecksumA1->otpCfgChecksum.wCfgLength);
-//
-// 	while (('I' == pstChecksumA1->abySignature [0]) && \
-// 			('D' == pstChecksumA1->abySignature [1]) && \
-// 			('X' == pstChecksumA1->abySignature [2]))
-// 	{
-// 		if ((wTmpOTPDataOffset > 0x0800) || \
-// 			(wTmpLenght > 0x0800))
-// 		{
-// 			// Though signature matched, still the offset or the length field is
-// 			// indicating OTP access more than 2K, which is invalid
-// 			// Probably an invlid index record, where the random bytes matched "IDX" pattern.
-// 			DEBUGPRINT("Trying to access more than 2k OTP memory\n");
-// 			return bRet;
-// 		}
-//
-// 		// Update the data offset as valid header is found
-// 		gwOTPDataOffset = (wTmpOTPDataOffset + wTmpLenght);
-//
-// 		// Move to next header
-// 		pstChecksumA1 --;
-// 		gwOTPHdrOffset-=sizeof(OTP_CFG_CHECKSUM_A1);
-//
-// 		wTmpOTPDataOffset = BIG_ENDIAN_WORD (pstChecksumA1->otpCfgChecksum.wCfgStartOffset);
-// 		wTmpLenght = BIG_ENDIAN_WORD (pstChecksumA1->otpCfgChecksum.wCfgLength);
-// 	}
-// 	uint16_t wTotalIndexSize = (2048 - gwOTPHdrOffset);
-//
-// 	if(wDataLength >= (unsigned int)(2048 - gwOTPDataOffset - wTotalIndexSize))
-// 	{
-// 		DEBUGPRINT("Error: No more free space available for programming OTP\n");
-// 		return bRet;
-// 	}
-// 	//////////////////////////////////////////////
-// 	// Update the OTP buffer for indicating programming count is incremented by one
-// 	bRet = Write_OTP(DevID, 0, abyBuffer, 2);
-// 	if(bRet < 0)
-// 	{
-// 		DEBUGPRINT("Failed to write OTP \n");
-// 		return bRet;
-// 	}
-// 	//////////////////////////////////////////////
-// 	// Update the otp data with new cfg block
-// 	bRet = Write_OTP(DevID, gwOTPDataOffset, pbyBuffer, wDataLength);
-// 	if(bRet < 0)
-// 	{
-// 		DEBUGPRINT ("Failed to write OTP \n");
-// 		return bRet;
-// 	}
-// 	//For comparing after programming.
-// 	memcpy (&abyBuffer[gwOTPDataOffset], pbyBuffer, wDataLength);
-//
-// 	uint8_t byChecksum ;
-// 	OTP_CFG_CHECKSUM_A1 stChecksum;
-//
-// 	// Calculate the checksum
-// 	for (int i = 0; i < wDataLength; i++)
-// 	{
-// 		byChecksum ^= OutputData [i];
-// 	}
-// 	//OTP_CFG_CHECKSUM_A1 stChecksum;
-// 	stChecksum.abySignature [0] = 'I';
-// 	stChecksum.abySignature [1] = 'D';
-// 	stChecksum.abySignature [2] = 'X';
-//
-// 	stChecksum.otpCfgChecksum.wCfgStartOffset = BIG_ENDIAN_WORD (gwOTPDataOffset);
-// 	stChecksum.otpCfgChecksum.wCfgLength = BIG_ENDIAN_WORD (wDataLength);
-// 	stChecksum.otpCfgChecksum.abyXORChecksum = byChecksum;
-//
-// 	//For comparing after programming.
-// 	memcpy (&abyBuffer[gwOTPHdrOffset], &stChecksum, sizeof (OTP_CFG_CHECKSUM_A1));
-//
-// 	bRet = Write_OTP(DevID, gwOTPHdrOffset, (uint8_t *)&stChecksum, sizeof (OTP_CFG_CHECKSUM_A1));
-// 	if(bRet < 0)
-// 	{
-// 		DEBUGPRINT("Failed to write OTP \n");
-// 		return bRet;
-// 	}
-// 	sleep (2);
-//
-// 	//Verify OTP
-// 	uint8_t abyVerifyBuffer[2048];
-// 	bRet = Read_OTP(DevID, 0, abyVerifyBuffer, 2048);
-// 	if(bRet < 0)
-// 	{
-// 		DEBUGPRINT("Failed to Read Config Memory \n");
-// 		return bRet;
-// 	}
-// 	if(0 == memcmp(abyVerifyBuffer, abyBuffer, 2048))
-// 	{
-// 		printf("OTP wrote successfully\n");
-// 		writeBinfile("actual_otp_data.bin",  abyBuffer, 2048);
-// 		bRet = TRUE;
-// 	}
-// 	else
-// 	{
-// 		printf("Mismatch in OTP read data\n");
-// 		writeBinfile("expected_otp_data.bin",  abyBuffer, 2048);
-// 		writeBinfile("actual_otp_data.bin",  abyVerifyBuffer, 2048);
-// 	}
-// 	//Reset the device.
-// 	uint8_t byData = 0;
-// 	xdata_read(DevID, 0x804, &byData, 1);
-//
-// 	byData|= 0x04;
-// 	xdata_write(DevID, 0x804, &byData, 1);
-//
-// 	byData = 0x40;
-// 	xdata_write(DevID, 0x80A, &byData, 1);
-//
-// 	return bRet;
-// }
 /*----------------------- Helper functions -----------------------------------*/
 static int usb_get_hubs(PHINFO pHubInfoList)
 {
@@ -1368,48 +1195,6 @@ int  usb_send_vsm_command(struct libusb_device_handle *handle, uint8_t * byValue
 	return rc;
 }
 
-int Read_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_bytes)
-{
-	int bRetVal = FALSE;
-	USB_CTL_PKT UsbCtlPkt;
-
-	UsbCtlPkt.handle 	= (libusb_device_handle*)gasHubInfo[handle].handle;
-	UsbCtlPkt.byRequest = 0x01;
-	UsbCtlPkt.wValue 	= wAddress;
-	UsbCtlPkt.wIndex 	= 0;
-	UsbCtlPkt.byBuffer 	= data;
-	UsbCtlPkt.wLength 	= num_bytes;
-
-	bRetVal = usb_HCE_read_data (&UsbCtlPkt);
-	if(bRetVal< 0)
-	{
-		DEBUGPRINT("Read OTP failed %d\n",bRetVal);
-		return bRetVal;
-	}
-	return bRetVal;
-}
-
-int Write_OTP(HANDLE handle, uint16_t wAddress, uint8_t *data, uint16_t num_bytes)
-{
-	int bRetVal = FALSE;
-	USB_CTL_PKT UsbCtlPkt;
-
-	UsbCtlPkt.handle 	= (libusb_device_handle*)gasHubInfo[handle].handle;
-	UsbCtlPkt.byRequest = 0x00;
-	UsbCtlPkt.wValue 	= wAddress;
-	UsbCtlPkt.wIndex 	= 0;
-	UsbCtlPkt.byBuffer 	= data;
-	UsbCtlPkt.wLength 	= num_bytes;
-
-	bRetVal = usb_HCE_write_data (&UsbCtlPkt);
-	if(bRetVal< 0)
-	{
-		DEBUGPRINT("Execute write OTP command failed %d\n",bRetVal);
-		return bRetVal;
-	}
-	return bRetVal;
-}
-
 int xdata_read(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_bytes)
 {
 	int bRetVal = FALSE;
@@ -1440,24 +1225,6 @@ int xdata_write(HANDLE handle, uint32_t wAddress, uint8_t *data, uint8_t num_byt
 
 	bRetVal = usb_HCE_write_data (&UsbCtlPkt);
 	return bRetVal;
-}
-
-unsigned int CalculateNumberofOnes(unsigned int UINTVar)
-{
-	unsigned int N0OfOnes = 0;
-	do
-	{
-		if(0x0000 == UINTVar) // variable if zero then return 0
-			break;
-		// Now counts 1's
-		while(UINTVar)
-		{
-			N0OfOnes++;
-			UINTVar &= (UINTVar -1);
-		}
-	}while(false);
-
-	return N0OfOnes;
 }
 
 //Return handle to the first instance of VendorID &amp; ProductID matched device.
