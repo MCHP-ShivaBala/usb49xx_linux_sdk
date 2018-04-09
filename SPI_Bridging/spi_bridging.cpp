@@ -237,6 +237,14 @@ int main (int argc, char* argv[])
 
         case TRANSFER :
 
+            //Enable the SPI interface.
+            if(FALSE == MchpUsbSpiSetConfig (hDevice,1))
+            {
+                printf ("\nError: SPI Pass thru enter failed:\n");
+                exit (1);
+            }
+
+            //SPI Passthrough transfer Read/Write
             if(FALSE == MchpUsbSpiTransfer(hDevice, byDirection, byBuffer, DataLen, wTotalLen))
             {
                 printf("SPI Transfer write failed \n");
@@ -250,7 +258,15 @@ int main (int argc, char* argv[])
                 }
                 printf("\n");
             }
-            bySpiRomBootflag = TRUE;
+
+            //Disable the SPI interface.
+            if(FALSE == MchpUsbSpiSetConfig (hDevice,0))
+            {
+                printf ("\nError: SPI Pass thru enter failed:\n");
+                exit (1);
+            }
+
+            bySpiRomBootflag = FALSE;
             break;
 
         default :
