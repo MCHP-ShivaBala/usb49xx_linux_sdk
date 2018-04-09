@@ -289,7 +289,7 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
             exit (1);
         }
 
-        //Reading READ_BLOCK_SIZE bytes at a time	//SB
+        //Reading READ_BLOCK_SIZE bytes at a time
         if(FALSE == MchpUsbSpiTransfer(DevID,1,(uint8_t *)&byReadBuffer,READ_BLOCK_SIZE,READ_BLOCK_SIZE+5)) //parameter3 is don't care
         {
             printf("SPI Transfer read failed \n");
@@ -303,7 +303,7 @@ BOOL MchpUsbSpiFlashRead(HANDLE DevID,UINT32 StartAddr,UINT8* InputData,UINT32 B
         byBuffer[0] = RDSR;
         do
         {
-            //performs write operation to the SPI Interface.	//SB
+            //performs write operation to the SPI Interface.
             if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,2)) //write
             {
                 printf("SPI Transfer write failed \n");
@@ -423,7 +423,7 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
 
     //WREN
     byBuffer[0] = WREN;
-    //performs write operation to the SPI Interface.	//SB
+    //performs write operation to the SPI Interface.
     if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,1)) //write
     {
         printf("SPI Transfer write failed \n");
@@ -465,16 +465,16 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
     for (uint16_t i=0; i<=NumPageWrites; i++)
     {
 
-        byWriteBuffer[1] = (StartAddr & 0xFF0000) >> 16; //SB
-        byWriteBuffer[2] = (StartAddr & 0x00FF00) >> 8; //SB
-        byWriteBuffer[3] = StartAddr & 0x0000FF; //SB
+        byWriteBuffer[1] = (StartAddr & 0xFF0000) >> 16;
+        byWriteBuffer[2] = (StartAddr & 0x00FF00) >> 8;
+        byWriteBuffer[3] = StartAddr & 0x0000FF;
 
         memcpy((void *)&byWriteBuffer[4], (const void *)&OutputData[i*WRITE_BLOCK_SIZE],
                                                                         WRITE_BLOCK_SIZE);
 
         //WREN
         byBuffer[0] = WREN;
-        //performs write operation to the SPI Interface.	//SB
+        //performs write operation to the SPI Interface.
         if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,1)) //write
         {
             printf("SPI Transfer write failed \n");
@@ -531,7 +531,7 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
 
         }while((byReadBuffer[0] & 0x80)>>7);
 
-        StartAddr += WRITE_BLOCK_SIZE;    //SB
+        StartAddr += WRITE_BLOCK_SIZE;
 
         //Printing process completion
         if(i == 0)
@@ -550,7 +550,7 @@ BOOL MchpUsbSpiFlashWrite(HANDLE DevID,UINT32 StartAddr,UINT8* OutputData, UINT3
 
     //WRDI
     byBuffer[0] = WRDIS;
-    //performs write operation to the SPI Interface.	//SB
+    //performs write operation to the SPI Interface.	
     if(FALSE == MchpUsbSpiTransfer(DevID,0,&byBuffer[0],1,1)) //write
     {
         printf("SPI Transfer write failed \n");

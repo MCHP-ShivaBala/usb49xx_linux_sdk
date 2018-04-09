@@ -56,7 +56,7 @@ int main (int argc, char* argv[])
 	uint8_t hDevice =  INVALID_HANDLE_VALUE;
     uint8_t bySpiRomBootflag, byReboot = 0;
 
-    uint8_t  pbyBuffer[MAX_FW_SIZE]; //SB
+    uint8_t  pbyBuffer[MAX_FW_SIZE];
 	int32_t wDataLength;
     char *sFirmwareFile;
 
@@ -104,7 +104,7 @@ int main (int argc, char* argv[])
 		else if(byOperation == WRITE)
 		{
 			sFirmwareFile = argv[5];
-			byStartAddr = 0x00;				//SB
+			byStartAddr = 0x00;				
 		}
 		else if(byOperation == TRANSFER)
 		{
